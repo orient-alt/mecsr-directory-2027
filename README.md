@@ -1,12 +1,13 @@
 # MECSR Directory 2027 — live flat plan
 
-This repository holds four files and nothing else:
+This repository holds five files and nothing else:
 
 | File | What it is | Who edits it |
 |---|---|---|
-| `MECSR_2027_Directory_Content_Tracker.xlsx` | The tracker, **repository edition** — sheets 07, 08 and 09 removed because they carry personal data (see below). Sheet **04 Flat Plan** drives the web page. | The Directory team |
+| `MECSR_2027_Directory_Content_Tracker.xlsx` | The tracker, **repository edition** — sheets 07, 08 and 09 removed because they carry personal data (see below). Sheet **04 Flat Plan** drives the web page; sheets 10–13 hold the intel findings and the book QA list. | The Directory team |
 | `index.html` | The flat plan as a web page. Reads the workbook above every time someone loads it. | Nobody — it is generated |
-| `MECSR_Directory_2027_Sample_Book_v10.pdf` | The current sample book, 384 pages | Nobody — it is generated |
+| `MECSR_Directory_2027_Sample_Book_v13.pdf` | The current sample book, 384 pages, **print order** — page 1 is the front cover. The file for the printer. No QR codes (see below). | Nobody — it is generated |
+| `MECSR_Directory_2027_Sample_Book_v13_Spreads.pdf` | The same book as a **reading edition** — the back cover is moved to the front, so a PDF viewer's two-page view pairs 2\|3, 4\|5 … exactly like the bound book. This is the one the page shows. | Nobody — it is generated |
 | `README.md` | This file | Nobody — it is generated |
 
 Once this is on GitHub Pages, the page is at
@@ -27,17 +28,19 @@ Worth being straight about this, because it changes what you should expect.
 `04 Flat Plan` when a colleague loads the page is what they see — sponsor,
 assigned to, content status, design status, notes, page counts. The page also
 finds the newest `MECSR_Directory_2027_Sample_Book_v<N>.pdf` in the folder on
-its own, so a new book version appears in the **Directory PDF** tab with no
-edit to the HTML.
+its own — the reading edition (`_Spreads`) first, the print file if there is
+no reading edition — so a new book version appears in the **Directory PDF** tab
+with no edit to the HTML. Page numbers typed into that tab are always book page
+numbers; the page converts them for the reading edition.
 
 **Not live:** me. This chat session does not keep running after the
 conversation ends, so there is no permanent connection between this session
 and the repository. I cannot watch the repo and react to a commit.
 
-**The closest thing to it:** a scheduled task. That wakes a fresh session on a
-schedule — say every Monday at 08:00 Dubai — which pulls the repo, rebuilds
-whatever needs rebuilding, and commits. That is real automation; it just runs
-on a clock rather than on a webhook. Say the word and it gets set up.
+**The closest thing to it:** a scheduled task. One exists — *MECSR Directory
+2027 — Monday flat-plan check*, every Monday at 08:00 Dubai. It reads the tracker
+and writes a status note into `_weekly\` on OneDrive. It never pushes to this
+repository; you do that.
 
 **The other half:** the page proofs and the sample book are baked in at build
 time. Change a page's *content* (not its status) and the proof in the page
@@ -59,7 +62,7 @@ sponsor, notes and page ranges are live. Artwork is not.
 5. Tick **Add a README file**. Leave everything else alone.
 6. **Create repository.**
 
-### 2 · Put the four files in
+### 2 · Put the five files in
 
 The easy route, no command line:
 
@@ -69,12 +72,14 @@ The easy route, no command line:
 3. Copy `index.html`, `README.md` and
    `MECSR_2027_Directory_Content_Tracker.xlsx` from
    `Directory 2026\MECSR 2027 Directory\GitHub Flat Plan\` into that folder.
-4. Add the book. `MECSR_Directory_2027_Sample_Book_v10.pdf` is 23 MB, which is
-   over the limit on the link between this chat and your machine, so it does not
-   land in that folder by itself — download it from the chat and drop it in
-   beside the other three. It has to sit in the repository root, with that exact
-   name, or the **Directory PDF** tab will not find it.
-5. Back in GitHub Desktop the four files appear as changes. Type a summary —
+4. The book is already in that folder: `MECSR_Directory_2027_Sample_Book_v13.pdf`
+   and `MECSR_Directory_2027_Sample_Book_v13_Spreads.pdf`, about 13 MB each. Both
+   have to sit in the repository root with those exact names, or the
+   **Directory PDF** tab will not find them. Older versions (v9, v10, v12) can
+   stay — the page always takes the newest — or be deleted to keep the folder
+   small; v12 still carries the QR codes, so deleting it avoids confusion.
+   There is no v11: it was withdrawn, so do not upload one if you find it.
+5. Back in GitHub Desktop the files appear as changes. Type a summary —
    "first upload of the 2027 flat plan" — and press **Commit to main**, then
    **Push origin**.
 
@@ -108,8 +113,9 @@ Open the URL and look at the two things that prove the wiring is live:
   **LIVE — 91 rows read from MECSR_2027_Directory_Content_Tracker.xlsx · 384
   pages**. If it says SNAPSHOT, the page could not fetch the workbook — check
   that the `.xlsx` really is in the repository root, spelled exactly as above.
-- On the **Directory PDF** tab the badge must read **LIVE — V10** and the book
-  must render in the frame.
+- On the **Directory PDF** tab the badge must read **LIVE — V13 · READING
+  SPREADS** and the book must render in the frame. A **Print edition ↗** button
+  next to it opens the print-order file.
 
 ### 5 · The everyday loop
 
@@ -193,10 +199,10 @@ Static Web Apps** with Entra ID sign-in — same idea, same free tier, and staff
 sign in with the work account they already have. Either way the hosting moves
 off GitHub Pages; GitHub stays as the place the files live.
 
-**Repository size.** Each version of the book is about 23 MB and git keeps every
-version forever. GitHub blocks single files over 100 MB and warns past 50 MB, so
-the book is fine, but four or five versions a cycle is roughly 100 MB of
-history. If that gets awkward, drop the version number from the file name and
+**Repository size.** Each version of the book is two files of about 19 MB and
+git keeps every version forever. GitHub blocks single files over 100 MB and warns
+past 50 MB, so the book is fine, but four or five versions a cycle is roughly
+150–200 MB of history. If that gets awkward, drop the version number from the file name and
 overwrite it — the page falls back to `MECSR_Directory_2027_Sample_Book.pdf`
 when it finds no versioned file. Pages sites are capped at 1 GB with a soft
 100 GB/month bandwidth limit, so neither is a real constraint.
@@ -212,24 +218,48 @@ when it finds no versioned file. Pages sites are capped at 1 GB with a soft
 | Directory PDF tab says NOT REACHABLE | Opened from disk with a `file://` path, or the PDF is missing | Use the Pages URL, or confirm the PDF is committed |
 | Page shows an old plan after a push | GitHub Pages build delay or a cached copy | Wait a minute, then hard-refresh (Ctrl+F5) |
 | A page proof shows old artwork | Proofs are baked in when the book is built | The book needs rebuilding — status and notes are live, artwork is not |
+| Two-page view shows 1\|2, 3\|4 | The viewer opened the print-order file | Open the `_Spreads` file, or set the viewer to "two-page with cover" |
 
 ---
 
+## No QR codes in the book (since v13, 12 Oct 2026)
+
+Brilliant Directories builds each listing's web address from the listing's name, so
+renaming a listing changes its address and breaks any QR code already printed for it.
+v13 therefore takes every QR code out of print: the code on each listing card, the
+country code on each country opener, the cover code, the dashed LISTING PENDING
+placeholders, and every line that told the reader to scan. Pages 5, 78 and 381 were
+rewritten to match. Readers are pointed to directory.mecsr.org to search by name.
+If QR codes come back in a later edition, they need addresses that never change —
+for example a short link per listing ID that MECSR redirects itself.
+
 ## Rebuilding
 
-The book, the tracker and the page are generated from one dataset. The scripts
-that do it live outside this repository:
+The original generators did not survive, so v12 was built by working on the v10
+book page by page: only the pages whose content or page number changed were
+re-rendered, and the folios on every moved page were restamped to match the
+original type exactly. The scripts are in OneDrive, `MECSR 2027 Directory\_build\`:
 
 ```
-build_flatplan.py        the 384-page plan, pinned to the book's own manifest
-book/gen_book2.py        the book HTML, in two parts
-book/render_book2.js     HTML → PDF via Chromium
-book/assemble_book.py    splices the real 2026 pages in and asserts 384 pages
-gen_tracker.py           the workbook, 11 sheets
-gen_dossier_html.py      the full dossier and this repository's index.html
+plan_v12.json         the v12 page map: which v10 page goes where, what is new
+plan_v13.json         the pages v13 re-renders on top of v12
+pages_front.py        renders the new and rewritten pages (contents, openers, open slots, Data Notes,
+                      What's New, How to Read, The Digital Directory)
+render.js             HTML → PDF via Chromium
+assemble_v12.py       splices the book, restamps folios, writes the print and reading editions
+assemble_v13.py       takes every QR code out of v12, swaps in the rewritten pages, writes v13
+dedupe_pdf.py         merges repeated fonts and images (lossless) to keep each file under 20 MB
+update_tracker.py     applies the RCM matrix, the v12 pagination and the intel to the workbook
+intel_curated.py      the checked intel findings behind sheets 10–12
+patch_dossier.py      refreshes the page proofs, the plan snapshot and the PDF tab in index.html
 ```
 
-Run in that order. `assemble_book.py` refuses to write a book that is not
-exactly 384 pages, and `build_flatplan.py` refuses a plan with a gap, an
-overlap or a page count that is not 24 signatures of 16 — so a mistake stops
-the build rather than reaching print.
+`assemble_v12.py` refuses to write a book that is not exactly 384 pages (24
+signatures of 16), `assemble_v13.py` refuses one in which any QR code or scan
+instruction survives, and `patch_dossier.py` refuses a plan that does not add to
+384 or that starts a two-page item on an odd page — so a mistake stops the build
+rather than reaching print.
+
+**Before the final print build:** fix the mixed-use page template so it holds six
+cards, as the plan assumes. Today it holds four, which drops 37 listings from the
+sample book (tracker sheet 13 Book QA).
