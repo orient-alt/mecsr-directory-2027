@@ -6,8 +6,8 @@ This repository holds five files and nothing else:
 |---|---|---|
 | `MECSR_2027_Directory_Content_Tracker.xlsx` | The tracker, **repository edition** — sheets 07, 08 and 09 removed because they carry personal data (see below). Sheet **04 Flat Plan** drives the web page; sheets 10–13 hold the intel findings and the book QA list. | The Directory team |
 | `index.html` | The flat plan as a web page. Reads the workbook above every time someone loads it. | Nobody — it is generated |
-| `MECSR_Directory_2027_Sample_Book_v13.pdf` | The current sample book, 384 pages, **print order** — page 1 is the front cover. The file for the printer. No QR codes (see below). | Nobody — it is generated |
-| `MECSR_Directory_2027_Sample_Book_v13_Spreads.pdf` | The same book as a **reading edition** — the back cover is moved to the front, so a PDF viewer's two-page view pairs 2\|3, 4\|5 … exactly like the bound book. This is the one the page shows. | Nobody — it is generated |
+| `MECSR_Directory_2027_Sample_Book_v14.pdf` | The current sample book, 384 pages, **print order** — page 1 is the front cover. The file for the printer. No QR codes; Retail Congress MENA 2026 photography and the MECSR Verified seal (see below). | Nobody — it is generated |
+| `MECSR_Directory_2027_Sample_Book_v14_Spreads.pdf` | The same book as a **reading edition** — the back cover is moved to the front, so a PDF viewer's two-page view pairs 2\|3, 4\|5 … exactly like the bound book. This is the one the page shows. | Nobody — it is generated |
 | `README.md` | This file | Nobody — it is generated |
 
 Once this is on GitHub Pages, the page is at
@@ -72,12 +72,12 @@ The easy route, no command line:
 3. Copy `index.html`, `README.md` and
    `MECSR_2027_Directory_Content_Tracker.xlsx` from
    `Directory 2026\MECSR 2027 Directory\GitHub Flat Plan\` into that folder.
-4. The book is already in that folder: `MECSR_Directory_2027_Sample_Book_v13.pdf`
-   and `MECSR_Directory_2027_Sample_Book_v13_Spreads.pdf`, about 13 MB each. Both
+4. The book is already in that folder: `MECSR_Directory_2027_Sample_Book_v14.pdf`
+   and `MECSR_Directory_2027_Sample_Book_v14_Spreads.pdf`, about 17.5 MB each. Both
    have to sit in the repository root with those exact names, or the
-   **Directory PDF** tab will not find them. Older versions (v9, v10, v12) can
+   **Directory PDF** tab will not find them. Older versions (v9, v10, v12, v13) can
    stay — the page always takes the newest — or be deleted to keep the folder
-   small; v12 still carries the QR codes, so deleting it avoids confusion.
+   small; v9, v10 and v12 still carry the QR codes, so deleting them avoids confusion.
    There is no v11: it was withdrawn, so do not upload one if you find it.
 5. Back in GitHub Desktop the files appear as changes. Type a summary —
    "first upload of the 2027 flat plan" — and press **Commit to main**, then
@@ -113,7 +113,7 @@ Open the URL and look at the two things that prove the wiring is live:
   **LIVE — 91 rows read from MECSR_2027_Directory_Content_Tracker.xlsx · 384
   pages**. If it says SNAPSHOT, the page could not fetch the workbook — check
   that the `.xlsx` really is in the repository root, spelled exactly as above.
-- On the **Directory PDF** tab the badge must read **LIVE — V13 · READING
+- On the **Directory PDF** tab the badge must read **LIVE — V14 · READING
   SPREADS** and the book must render in the frame. A **Print edition ↗** button
   next to it opens the print-order file.
 
@@ -233,6 +233,21 @@ rewritten to match. Readers are pointed to directory.mecsr.org to search by name
 If QR codes come back in a later edition, they need addresses that never change —
 for example a short link per listing ID that MECSR redirects itself.
 
+## Photography and the MECSR Verified seal (since v14, 13 Oct 2026)
+
+v14 adds photographs from Retail Congress MENA 2026 and the MENA Awards 2026. The MENA
+Awards house ad (p66) shows the 2026 winners on stage; the other house ads (67–69) use
+congress photography; each showcase sponsor's imagery page (21–31) shows that sponsor's
+own stand at the congress; and the Expert Views (38–54), the leadership messages (6–8)
+and the Title Partner page (2) carry congress photos as stand-ins until partners and
+authors supply their own. Every stand-in is captioned as one.
+
+The MECSR Verified seal — navy, gold hairline, gold tick — sits in the bottom-right
+corner of the photograph on the 341 listings that carry one, and beside the name on the
+seven Must-Visit pages. Page 78 explains it and page 382 credits the photography. In this
+sample the seal is a design demonstration; in production it goes only on records the
+owner or operator has confirmed.
+
 ## Rebuilding
 
 The original generators did not survive, so v12 was built by working on the v10
@@ -243,11 +258,15 @@ original type exactly. The scripts are in OneDrive, `MECSR 2027 Directory\_build
 ```
 plan_v12.json         the v12 page map: which v10 page goes where, what is new
 plan_v13.json         the pages v13 re-renders on top of v12
+pages_v14.py          renders the v14 photo pages and overlays (sponsor stands, house ads, seal legend)
+prep_photos_v14.py    crops and sizes the Retail Congress MENA 2026 photographs for v14
+render_size.js        HTML → PDF at an exact size (the MECSR Verified seal)
 pages_front.py        renders the new and rewritten pages (contents, openers, open slots, Data Notes,
                       What's New, How to Read, The Digital Directory)
 render.js             HTML → PDF via Chromium
 assemble_v12.py       splices the book, restamps folios, writes the print and reading editions
 assemble_v13.py       takes every QR code out of v12, swaps in the rewritten pages, writes v13
+assemble_v14.py       adds the photo pages, the overlays and the seal to v13, writes v14
 dedupe_pdf.py         merges repeated fonts and images (lossless) to keep each file under 20 MB
 update_tracker.py     applies the RCM matrix, the v12 pagination and the intel to the workbook
 intel_curated.py      the checked intel findings behind sheets 10–12
