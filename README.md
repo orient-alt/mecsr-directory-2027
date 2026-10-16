@@ -1,6 +1,6 @@
 # MECSR Directory 2027 — live flat plan
 
-This repository holds five files and nothing else:
+This repository holds six files and nothing else:
 
 | File | What it is | Who edits it |
 |---|---|---|
@@ -8,6 +8,7 @@ This repository holds five files and nothing else:
 | `index.html` | The flat plan as a web page. Reads the workbook above every time someone loads it. | Nobody — it is generated |
 | `MECSR_Directory_2027_Sample_Book_v14.pdf` | The current sample book, 384 pages, **print order** — page 1 is the front cover. The file for the printer. No QR codes; Retail Congress MENA 2026 photography and the MECSR Verified seal (see below). | Nobody — it is generated |
 | `MECSR_Directory_2027_Sample_Book_v14_Spreads.pdf` | The same book as a **reading edition** — the back cover is moved to the front, so a PDF viewer's two-page view pairs 2\|3, 4\|5 … exactly like the bound book. This is the one the page shows. | Nobody — it is generated |
+| `session-record.html` | The session record of 10–16 Oct 2026, **public edition**: summary, PDF directory, app designs, sourcing and verification plan, handoff notes. The page shows it in its **Session record** tab; `…/mecsr-directory-2027/#record` opens that tab directly. Deal terms, folders on staff computers and the scheduled tasks' instructions are left out, and it holds no contact data. | Nobody — it is generated |
 | `README.md` | This file | Nobody — it is generated |
 
 Once this is on GitHub Pages, the page is at
