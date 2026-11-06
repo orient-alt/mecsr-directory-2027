@@ -1,5 +1,6 @@
 rules_version = '2';
-// Firestore rules for the MECSR 2027 flat plan (project directory-ff8f1), version of 6 Nov 2026 (stress-test fixes), with sample PDFs and tagging people before they sign in.
+// Firestore rules for the MECSR 2027 flat plan (project directory-ff8f1), version of 6 Nov 2026 (evening): the full plan is for
+// editors only, the public sees a copy with generic page names, and orient@mecsc.org has a private "My plan" space.
 // Paste into Firebase console > Firestore Database > Rules, then Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -23,6 +24,12 @@ service cloud.firestore {
       return changeId is string
         && !exists(/databases/$(database)/documents/flatplans/$(planId)/changes/$(changeId))     // must be a NEW entry
         && existsAfter(/databases/$(database)/documents/flatplans/$(planId)/changes/$(changeId));
+    }
+    // Every save of the plan rewrites the public copy in the same transaction, with the same version number, so the
+    // public board never lags behind. (It also stops a page opened before this version, which does not know the public
+    // copy and would turn half and quarter pages into whole pages, from saving: it is told to reload.)
+    function publicFollows(planId) {
+      return getAfter(/databases/$(database)/documents/flatplans/$(planId)/public/board).data.version == request.resource.data.version;
     }
     // A new note or chat message: written by the signed-in editor, at the server time, within the size limits.
     function newMessage(fields) {
@@ -55,16 +62,31 @@ service cloud.firestore {
     }
 
     match /flatplans/{planId} {
-      // The plan is public, like the page that shows it (owner's decision, 6 Nov 2026): it names the clients who bought
-      // pages, but holds no emails or IP addresses. Page details (proofs, samples, notes) are editors only.
-      allow read: if true;
+      // The full plan names the clients who bought pages and the countries on each page: editors only (owner's decision,
+      // 6 Nov 2026, evening). Anyone else sees the public copy below, which has generic page names only.
+      allow read: if isEditor();
       allow create, update: if isEditor()
         && request.resource.data.keys().hasOnly(['items', 'version', 'updatedAt', 'lastChange'])
         && request.resource.data.items is list
         && request.resource.data.items.size() <= 1000
         && request.resource.data.updatedAt == request.time
-        && logged(planId, request.resource.data.lastChange);
+        && logged(planId, request.resource.data.lastChange)
+        && publicFollows(planId);
       allow delete: if false;
+
+      // The public copy of the board: generic page names (Front Cover, Company Showcase, Expert View, Listings...), each
+      // page's size and whether it is OPEN, sold or house, and content, layout and lock marks. No client or country names,
+      // notes or sample pages. Editors rewrite it with every change of the plan.
+      match /public/{docId} {
+        allow read: if true;
+        allow create, update: if isEditor()
+          && docId == 'board'
+          && request.resource.data.keys().hasOnly(['items', 'version', 'updatedAt'])
+          && request.resource.data.items is list
+          && request.resource.data.items.size() <= 1000
+          && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
 
       // The change log: who, when, from which IP address, what changed. Editors can read it; nobody can edit or delete it.
       match /changes/{changeId} {
@@ -161,6 +183,12 @@ service cloud.firestore {
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 120;
       allow delete: if false;
+    }
+
+    // "My plan": orient@mecsc.org's own tasks, notes, dates, links and attached files. Nobody else can read or change it,
+    // editors included.
+    match /private/{path=**} {
+      allow read, write: if isOwner();
     }
 
     // The editor list: approved by the owner in the page ("Approved people"), or in the Firebase console.

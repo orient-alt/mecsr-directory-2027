@@ -9,8 +9,18 @@ const PLAN_ID = '2027';
 const RELEASE = (window.TIMELINE_SEED && window.TIMELINE_SEED.release) || '2027-02-26';
 const TYPE_COLOR = {"Cover":"#12365E","Ad":"#B8860B","Showcase":"#7A3E9D","Article":"#17795E","Country Profile":"#0E6FA8",
   "Feature":"#B03A5B","Message":"#C2703A","TOC":"#6E6A2F","Editorial":"#4A5568","Listing":"#8A9099","Index":"#5E7C8B"};
-const TYPE_LABEL = {"Cover":"Cover","Ad":"Ad","Showcase":"DPS showcase","Article":"Expert View","Country Profile":"Country profile",
+const TYPE_LABEL = {"Cover":"Cover","Ad":"Ad","Showcase":"Company showcase","Article":"Expert View","Country Profile":"Country profile",
   "Feature":"Must-Visit","Message":"Message","TOC":"Contents and openers","Editorial":"Editorial","Listing":"Listings","Index":"Index"};
+/* What the public sees (signed out, or an account that is not an editor): generic page names only. Client names,
+   country names, notes and sample pages stay with the editors. A name in KEEP is shown as it is; any other name is
+   replaced by its type's generic name, so a new page can never show a client by mistake. */
+const TYPE_PUBLIC = {"Cover":"Cover","Ad":"Ad","Showcase":"Company Showcase","Article":"Expert View","Country Profile":"Country Profile",
+  "Feature":"Must-Visit","Message":"Message","TOC":"Contents","Editorial":"Editorial","Listing":"Listings","Index":"Index"};
+const KEEP = new Map(["Front Cover", "Inside Front Cover", "Inside Back Cover", "Back Cover", "Table of Contents", "About the 2027 Edition",
+  "What's New in 2027", "Chairman's Message", "CEO Message", "President's Message", "The MECSR Team", "Founding Fathers", "Board of Directors",
+  "Global Representatives", "Opener & contents", "Section opener", "Expert View", "Full-page ad", "Half-page ad", "Quarter-page ad", "Media Kit",
+  "A–Z Index", "The Digital Directory", "Acknowledgements & Credits", "Retail brands", "Service providers", "MECSR Member Listings"]
+  .map(s => [s.toLowerCase(), s]));
 const ORDER = ["Cover","Ad","Showcase","Article","Country Profile","Feature","Message","TOC","Editorial","Listing","Index"];
 const NOT_SPREADS = ["Listing","Index"];            // a two-page item of any other type must sit on one spread
 const PREFIXES = ["DPS — ","Showcase — ","Expert Views — ","Expert View — ","Country Profiles — ","Must-Visit — ","The People Behind MECSR — "];
@@ -51,10 +61,43 @@ function todayISO(){
 const tsMs = t => !t ? 0 : typeof t.toMillis === 'function' ? t.toMillis() : typeof t.toDate === 'function' ? +t.toDate()
   : t instanceof Date ? +t : (+t || 0);
 function shortLabel(it){
+  if (S.pub) return it.item || '';                       // the public board already carries generic names only
   let s = SHORT[it.item] || it.item || '';
   for (const p of PREFIXES) if (s.indexOf(p) === 0) { s = s.slice(p.length); s = s.charAt(0).toUpperCase() + s.slice(1); break; }
   if (it.sponsor && it.sponsor !== 'OPEN' && s.toLowerCase().indexOf(it.sponsor.toLowerCase()) < 0) s += ' · ' + it.sponsor;
   return s;
+}
+/* sizes: whole pages (1 to 400), or a half or a quarter page that shares its page with the placements next to it */
+function normPP(v){
+  const n = parseFloat(v);
+  if (!(n > 0)) return 1;
+  if (n >= 0.75) return clamp(Math.round(n), 1, 400);
+  return n >= 0.375 ? 0.5 : 0.25;
+}
+function parsePP(s){
+  s = String(s == null ? '' : s).trim().replace(',', '.');
+  if (s === '½' || s === '1/2') return 0.5;
+  if (s === '¼' || s === '1/4') return 0.25;
+  return normPP(s);
+}
+function fmtPP(n){                                       // 0.5 -> ½, 15.75 -> 15¾
+  n = Math.round((+n || 0) * 4) / 4;
+  const w = Math.floor(n), f = n - w, g = f === 0.25 ? '¼' : f === 0.5 ? '½' : f === 0.75 ? '¾' : '';
+  return (w || !g ? String(w) : '') + g;
+}
+const sizeName = pp => pp === 0.5 ? '½ page' : pp === 0.25 ? '¼ page' : pp + (pp === 1 ? ' page' : ' pages');
+const progNorm = (v, pp) => pp < 1 ? ((+v || 0) >= pp - 1e-9 ? pp : 0) : clamp(parseInt(v, 10) || 0, 0, pp);
+function publicLabel(it){
+  let s = SHORT[it.item] || it.item || '';
+  for (const p of PREFIXES) if (s.indexOf(p) === 0) { s = s.slice(p.length); break; }
+  s = s.replace(/[’‘]/g, "'").trim();
+  return KEEP.get(s.toLowerCase()) || TYPE_PUBLIC[it.type] || 'Page';
+}
+const itemsSig = items => JSON.stringify((items || []).map(o => Object.keys(o).sort().map(k => [k, o[k]])));
+/* the public copy of the plan: no client names, no item names beyond generic ones, no notes, no sample pages */
+function publicItems(items){
+  return cleanItems(items).map(it => ({id: it.id, section: it.section, item: publicLabel(it), type: it.type, pp: it.pp,
+    sponsor: it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? 'SOLD' : '', contentPages: it.contentPages, layoutPages: it.layoutPages, locked: it.locked}));
 }
 const hyph = s => esc(s).replace(/[\w']+/g, w => (BREAKS[w] || w).split('|').join('&shy;'));
 const newId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -100,13 +143,13 @@ function getIp(){
 /* ---------------- the plan: items in book order; page numbers are always computed ---------------- */
 function cleanItems(items){
   return items.map(x => {
-    const pp = clamp(parseInt(x.pp, 10) || 1, 1, 400), locked = !!x.locked, lf = parseInt(x.lockedFrom, 10);
+    const pp = normPP(x.pp), locked = !!x.locked, lf = parseInt(x.lockedFrom, 10);
     return {id: String(x.id), section: String(x.section || ''), item: String(x.item || ''), type: String(x.type || 'Editorial'), pp,
       sponsor: String(x.sponsor || ''),
       sample: Array.isArray(x.sample) && x.sample.length === 2 ? [x.sample[0] | 0, x.sample[1] | 0] : null,
       note: String(x.note || ''),
-      contentPages: clamp(parseInt(x.contentPages, 10) || 0, 0, pp),
-      layoutPages: clamp(parseInt(x.layoutPages, 10) || 0, 0, pp),
+      contentPages: progNorm(x.contentPages, pp),
+      layoutPages: progNorm(x.layoutPages, pp),
       locked, lockedFrom: locked && lf > 0 ? lf : null};
   });
 }
@@ -116,22 +159,61 @@ function count(t, it){
   t.content += it.contentPages || 0; t.layout += it.layoutPages || 0;
   if (it.locked) { t.locked += it.pp; t.lockedItems++; }
 }
+/* Page numbers for every item. A half or quarter page shares a page with the placements next to it: halves sit top
+   or bottom, quarters in a 2 x 2 grid. A whole-page item, or a new section, always starts on a fresh page, so the
+   rest of a page that is only partly sold stays free (listed as a gap). */
 function layout(items){
-  let p = 1; const list = [];
+  let p = 1, fill = 0, prev = null; const list = [];
   for (const it of items) {
-    const pp = Math.max(1, parseInt(it.pp, 10) || 1);
-    list.push(Object.assign({}, it, {pp, from: p, to: p + pp - 1, open: it.sponsor === 'OPEN'})); p += pp;
+    const pp = normPP(it.pp);
+    if (prev !== null && it.section !== prev && fill > 0) { p++; fill = 0; }
+    prev = it.section;
+    let from, at = 0;
+    if (pp < 1) {
+      if (pp === 0.5) fill = Math.ceil(fill * 2 - 1e-9) / 2;          // a half starts at the top or the middle
+      if (fill + pp > 1 + 1e-9) { p++; fill = 0; }
+      from = p; at = fill; fill += pp;
+      if (fill >= 1 - 1e-9) { p++; fill = 0; }
+    } else {
+      if (fill > 0) { p++; fill = 0; }
+      from = p; p += pp;
+    }
+    list.push(Object.assign({}, it, {pp, from, to: pp < 1 ? from : from + pp - 1, at, part: pp < 1, open: it.sponsor === 'OPEN'}));
   }
-  const total = p - 1, P2I = {}, secs = [], stats = tally();
-  list.forEach(it => { for (let q = it.from; q <= it.to; q++) P2I[q] = it; });
+  const total = fill > 0 ? p : p - 1, P2I = {}, P2L = {}, secs = [], stats = tally();
+  list.forEach(it => { for (let q = it.from; q <= it.to; q++) { if (!P2I[q]) P2I[q] = it; (P2L[q] = P2L[q] || []).push(it); } });
   list.forEach(it => {
     let s = secs[secs.length - 1];
     if (!s || s.section !== it.section) secs.push(s = Object.assign({section: it.section, from: it.from, to: it.to, pp: 0, items: []}, tally()));
-    s.to = it.to; s.pp += it.pp; s.items.push(it); count(s, it); count(stats, it);
+    s.to = Math.max(s.to, it.to); s.items.push(it); count(s, it); count(stats, it);
   });
+  secs.forEach(s => { s.pp = s.to - s.from + 1; });
+  const gaps = [];
+  for (let q = 1; q <= total; q++) {
+    const on = P2L[q] || [];
+    if (on.length && on[0].part) { const used = on.reduce((a, x) => a + x.pp, 0); if (used < 1 - 1e-9) gaps.push({page: q, free: 1 - used, it: on[on.length - 1]}); }
+  }
   const split = list.filter(it => it.pp === 2 && NOT_SPREADS.indexOf(it.type) < 0 && it.from % 2 === 1);
   const moved = list.filter(it => it.locked && it.lockedFrom && it.lockedFrom !== it.from);
-  return {items: list, total, P2I, secs, stats, warnings: {split, odd: total % 2 === 1, moved}};
+  return {items: list, total, P2I, P2L, secs, stats, warnings: {split, odd: total % 2 === 1, moved, gaps}};
+}
+/* where a half or quarter page sits on its page, in % of the page: top, left, width, height */
+function cellBox(it){
+  if (it.pp >= 0.5) return {t: it.at >= 0.5 - 1e-9 ? 50 : 0, l: 0, w: 100, h: 50};
+  const k = Math.round(it.at * 4);
+  return {t: k >= 2 ? 50 : 0, l: k % 2 ? 50 : 0, w: 50, h: 50};
+}
+/* the free parts of a shared page, as boxes like cellBox */
+function freeBoxes(on){
+  const used = [false, false, false, false];
+  on.forEach(it => { const b = cellBox(it); for (let k = 0; k < 4; k++) { const t = k >= 2 ? 50 : 0, l = k % 2 ? 50 : 0;
+    if (t >= b.t && t < b.t + b.h && l >= b.l && l < b.l + b.w) used[k] = true; } });
+  const out = [];
+  [[0, 1], [2, 3]].forEach(([a, b]) => {
+    if (!used[a] && !used[b]) out.push({t: a >= 2 ? 50 : 0, l: 0, w: 100, h: 50, free: 0.5});
+    else [a, b].forEach(k => { if (!used[k]) out.push({t: k >= 2 ? 50 : 0, l: k % 2 ? 50 : 0, w: 50, h: 50, free: 0.25}); });
+  });
+  return out;
 }
 function findIdx(items, id){
   const i = items.findIndex(x => x.id === id);
@@ -187,9 +269,17 @@ const OPS = {
     out.splice(at, 0, op.item); return out;
   },
   remove(items, op){ const i = findIdx(items, op.id); assertUnlocked(items[i], 'delete it'); return items.filter(x => x.id !== op.id); },
-  restore(items, op){ return op.items.map(x => Object.assign({}, x)); }
+  restore(items, op){ return op.items.map(x => Object.assign({}, x)); },
+  /* a new name for a whole section; its pages, and any locks on them, stay as they are */
+  renameSection(items, op){
+    if (!items.some(x => x.section === op.section)) throw new Error('that section is no longer in the plan');
+    const to = String(op.to || '').trim();
+    if (!to) throw new Error('give the section a name');
+    if (to !== op.section && items.some(x => x.section === to)) throw new Error('another section already has that name');
+    return items.map(x => x.section === op.section ? Object.assign({}, x, {section: to}) : x);
+  }
 };
-const statusText = it => it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? 'sold to ' + it.sponsor : 'house';
+const statusText = it => it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? (S.pub ? 'sold' : 'sold to ' + it.sponsor) : 'house';
 function progressText(kind, b, a){
   const k = kind === 'content' ? 'contentPages' : 'layoutPages', name = kind === 'content' ? 'content' : 'layout';
   if (a[k] === b[k]) return '';
@@ -212,7 +302,7 @@ function summarise(op, before, after){
   } else if (op.type === 'update') {
     const b = fb(op.id), a = fa(op.id), ch = [];
     if (a.item !== b.item) ch.push('renamed from ' + q(b));
-    if (a.pp !== b.pp) ch.push('pages ' + b.pp + ' → ' + a.pp);
+    if (a.pp !== b.pp) ch.push('size ' + sizeName(b.pp) + ' → ' + sizeName(a.pp));
     if (a.sponsor !== b.sponsor) ch.push(statusText(b) + ' → ' + statusText(a));
     if (a.type !== b.type) ch.push('type ' + (TYPE_LABEL[b.type] || b.type) + ' → ' + (TYPE_LABEL[a.type] || a.type));
     if (a.section !== b.section) ch.push('section ' + secName(b.section) + ' → ' + secName(a.section));
@@ -227,6 +317,8 @@ function summarise(op, before, after){
     const b = fb(op.id); s = 'Deleted ' + q(b) + ' (was pp ' + pages(b.from, b.to) + ')';
   } else if (op.type === 'restore') {
     s = 'Restored the plan as it was' + (op.when ? ' on ' + op.when : '');
+  } else if (op.type === 'renameSection') {
+    s = 'Renamed the section ' + secName(op.section) + ' to ' + secName(op.to);
   }
   if (A.total !== B.total) s += '. Book now ' + A.total + ' pages';
   return s;
@@ -368,21 +460,52 @@ class LiveStore {
     this.tlRef = f.doc(this.db, 'flatplans', PLAN_ID, 'meta', 'timeline');
     this.notesCol = f.collection(this.db, 'flatplans', PLAN_ID, 'notes');
     this.chatCol = f.collection(this.db, 'flatplans', PLAN_ID, 'chat');
+    this.pubRef = f.doc(this.db, 'flatplans', PLAN_ID, 'public', 'board');
+    this.wsCol = f.collection(this.db, 'private', 'workspace', 'entries');
+    this.blobCol = f.collection(this.db, 'private', 'workspace', 'blobs');
     this.user = null; this.editor = false; this.last = null; this.lastTimeline = null; this.subs = []; this.names = {};
     this.collab = null;            // {notes, chat, people, timeline, error}: set by the page
+    this.planFn = null; this.planErr = null; this.planUnsub = null; this.mode = ''; this.preview = false; this.wsUnsub = null;
   }
   canEdit(){ return !!(this.user && this.editor); }
-  subscribe(fn, onErr){
-    return this.f.onSnapshot(this.planRef, snap => {
+  /* Editors read the full plan; everyone else (and an editor previewing the public view) reads the public copy,
+     which has generic page names only. Nothing is read until the account is known. */
+  subscribe(fn, onErr){ this.planFn = fn; this.planErr = onErr; }
+  attach(){
+    const mode = this.canEdit() && !this.preview ? 'full' : 'public';
+    if (mode === this.mode && this.planUnsub) return;
+    if (this.planUnsub) { try { this.planUnsub(); } catch (e) {} }
+    this.mode = mode; this.last = null; this.pubChecked = false;
+    if (this.onMode) this.onMode(mode);
+    const opts = {serverTimestamps: 'estimate'}, when = d => d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate() : null;
+    if (mode === 'full') this.planUnsub = this.f.onSnapshot(this.planRef, snap => {
       if (snap.exists()) {
-        const d = snap.data({serverTimestamps: 'estimate'});
+        const d = snap.data(opts);
         this.legacy = LEGACY_KEYS.some(k => k in d);
-        this.last = {items: Array.isArray(d.items) ? d.items : this.seed, meta: {updatedAt: d.updatedAt && d.updatedAt.toDate ? d.updatedAt.toDate() : null,
-          version: d.version || 0, lastChange: d.lastChange || ''}};
+        this.last = {items: Array.isArray(d.items) ? d.items : this.seed, meta: {updatedAt: when(d), version: d.version || 0, lastChange: d.lastChange || ''}};
       } else this.last = {items: this.seed, meta: {updatedAt: null, version: 0, seed: true}};
-      fn(this.last);
+      if (this.planFn) this.planFn(Object.assign({pub: false}, this.last));
       if (this.legacy) this.tidy();
-    }, err => { if (onErr) onErr(err); });
+      if (snap.exists() && !snap.metadata.hasPendingWrites) this.syncPublic(this.last);
+    }, err => { if (this.planErr) this.planErr(err); });
+    else this.planUnsub = this.f.onSnapshot(this.pubRef, snap => {
+      const d = snap.exists() ? snap.data(opts) : null;
+      this.last = d && Array.isArray(d.items) ? {items: d.items, meta: {updatedAt: when(d), version: d.version || 0}}
+        : {items: publicItems(this.seed), meta: {updatedAt: null, version: 0, seed: true}};
+      if (this.planFn) this.planFn(Object.assign({pub: true}, this.last));
+    }, err => { if (this.planErr) this.planErr(err); });
+  }
+  setPreview(on){ this.preview = !!on && this.canEdit(); this.attach(); }
+  /* The public copy follows every saved change (in the same transaction). This also writes it the first time, or
+     after an update to how public names are made, when an editor opens the page and finds it out of date. */
+  async syncPublic(last){
+    if (this.pubChecked || !this.canEdit() || !last || last.meta.seed) return;
+    this.pubChecked = true;
+    try {
+      const want = publicItems(last.items), s = await this.f.getDoc(this.pubRef), d = s.exists() ? s.data() : null;
+      if (d && d.version === last.meta.version && itemsSig(d.items) === itemsSig(want)) return;     // Firestore returns map keys sorted
+      await this.f.setDoc(this.pubRef, {items: want, version: last.meta.version, updatedAt: this.f.serverTimestamp()});
+    } catch (e) { console.warn('public board', e); this.pubChecked = false; }
   }
   /* The plan record saved before 4 Nov 2026 also carried the last editor's name, email and IP address, which anyone
      could read. The first editor to open this version rewrites it without them (the plan itself does not change). */
@@ -396,6 +519,7 @@ class LiveStore {
         const d = snap.data(); if (!LEGACY_KEYS.some(k => k in d)) return;
         const items = cleanItems(Array.isArray(d.items) ? d.items : this.seed), version = (d.version || 0) + 1;
         tx.set(this.planRef, {items, version, updatedAt: f.serverTimestamp(), lastChange: changeRef.id});
+        tx.set(this.pubRef, {items: publicItems(items), version, updatedAt: f.serverTimestamp()});
         tx.set(changeRef, {at: f.serverTimestamp(), by: u.email, name: u.name, ip, action: 'tidy', version, items,
           summary: 'Removed the editor’s name, email and IP address from the public plan record (the plan itself is unchanged)'});
       });
@@ -403,10 +527,13 @@ class LiveStore {
   }
   onUser(fn){
     this.a.onAuthStateChanged(this.auth, async u => {
-      this.stopCollab();
+      this.stopCollab(); this.stopWorkspace();
       this.user = u ? {email: u.email, name: u.displayName || u.email} : null;
       this.editor = u ? await this.checkEditor(u) : false;
+      if (!this.canEdit()) this.preview = false;
+      this.attach();
       if (this.canEdit()) { this.touchPerson().catch(e => console.warn('people', e)); this.startCollab(); if (this.legacy) this.tidy(); }
+      if (this.isOwner()) this.startWorkspace();
       fn();
     });
   }
@@ -435,7 +562,7 @@ class LiveStore {
     {name, addedBy: u.email, addedAt: this.f.serverTimestamp()}); }
   unapprove(email){ return this.f.deleteDoc(this.f.doc(this.db, 'editors', email)); }
   signIn(){ const p = new this.a.GoogleAuthProvider(); p.setCustomParameters({prompt: 'select_account'}); return this.a.signInWithPopup(this.auth, p); }
-  signOut(){ this.stopCollab(); return this.a.signOut(this.auth); }
+  signOut(){ this.stopCollab(); this.stopWorkspace(); return this.a.signOut(this.auth); }
   me(){ const u = this.auth.currentUser; if (!u) throw new Error('sign in first'); return {email: u.email, name: u.displayName || u.email}; }
   async apply(op){
     const u = this.me(), ip = await getIp(), f = this.f, changeRef = f.doc(this.changes);
@@ -447,6 +574,7 @@ class LiveStore {
       const summary = summarise(op, before, after);
       tx.set(this.planRef, {items: after, version, updatedAt: f.serverTimestamp(), lastChange: changeRef.id});
       tx.set(changeRef, {at: f.serverTimestamp(), by: u.email, name: u.name, ip, action: op.type, summary, version, items: after});
+      tx.set(this.pubRef, {items: publicItems(after), version, updatedAt: f.serverTimestamp()});
     });
   }
   async applyTimeline(op){
@@ -534,15 +662,76 @@ class LiveStore {
     const u = this.me();
     await this.f.updateDoc(this.msgRef('note', id), {resolved: !!resolved, resolvedBy: u.email, resolvedAt: this.f.serverTimestamp()});
   }
+  /* "My plan": orient@mecsc.org only (rules: private/** is isOwner).
+       private/workspace/entries/{id}             a task, note or date: title, dates, status, notes, tags, links, files
+       private/workspace/blobs/{fileId}           an attached file's name, type and size
+       private/workspace/blobs/{fileId}/parts/*   the file itself, in pieces under Firestore's 1 MB per record     */
+  startWorkspace(){
+    const cb = this.collab || {};
+    this.stopWorkspace();
+    this.wsUnsub = this.f.onSnapshot(this.wsCol, qs => { if (cb.workspace) cb.workspace(qs.docs.map(d => Object.assign({id: d.id}, d.data({serverTimestamps: 'estimate'})))); },
+      e => { console.warn('my plan', e); if (cb.workspaceError) cb.workspaceError(e); });
+  }
+  stopWorkspace(){
+    if (this.wsUnsub) { try { this.wsUnsub(); } catch (e) {} }
+    this.wsUnsub = null; const cb = this.collab || {}; if (cb.workspaceReset) cb.workspaceReset();
+  }
+  newEntryId(){ return this.f.doc(this.wsCol).id; }
+  async saveEntry(id, data, isNew){
+    const f = this.f, out = Object.assign({}, data, {updatedAt: f.serverTimestamp()});
+    if (isNew) out.createdAt = f.serverTimestamp();
+    await f.setDoc(f.doc(this.wsCol, id), out, {merge: true});
+  }
+  async deleteEntry(id, files){
+    for (const x of files || []) await this.deleteBlob(x.id).catch(e => console.warn('file', e));
+    await this.f.deleteDoc(this.f.doc(this.wsCol, id));
+  }
+  async putFile(file, progress){
+    const f = this.f, ref = f.doc(this.blobCol), b64 = await fileBase64(file), PART = 900000, n = Math.max(1, Math.ceil(b64.length / PART));
+    try {
+      for (let i = 0; i < n; i++) {
+        if (progress) progress(i, n);
+        await f.setDoc(f.doc(ref, 'parts', String(i).padStart(3, '0')), {i, data: b64.slice(i * PART, (i + 1) * PART)});
+      }
+      const meta = {name: String(file.name || 'file').slice(0, 200), type: String(file.type || 'application/octet-stream').slice(0, 120), size: file.size, n};
+      await f.setDoc(ref, Object.assign({at: f.serverTimestamp()}, meta));
+      return Object.assign({id: ref.id}, meta);
+    } catch (e) { this.deleteBlob(ref.id).catch(() => {}); throw e; }
+  }
+  async getFile(x){
+    const f = this.f, qs = await f.getDocs(f.query(f.collection(this.blobCol, x.id, 'parts'), f.orderBy('i')));
+    const b64 = qs.docs.map(d => String(d.data().data || '')).join('');
+    if (!b64) throw new Error('the file could not be found');
+    const bin = atob(b64), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Blob([bytes], {type: x.type || 'application/octet-stream'});
+  }
+  async deleteBlob(id){
+    const f = this.f, qs = await f.getDocs(f.collection(this.blobCol, id, 'parts'));
+    for (const d of qs.docs) await f.deleteDoc(d.ref);
+    await f.deleteDoc(f.doc(this.blobCol, id));
+  }
+}
+function fileBase64(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => { const s = String(r.result || ''), k = s.indexOf(','); res(k >= 0 ? s.slice(k + 1) : ''); };
+    r.onerror = () => rej(r.error || new Error('the file could not be read'));
+    r.readAsDataURL(file);
+  });
 }
 
 /* ---------------- state and rendering ---------------- */
 let store = null, editing = false, lastDrag = 0, sorts = [], dragging = false, renderPending = false;
-const S = {items: [], meta: {}, L: layout([])};
-function setState(items, meta){
+/* S.pub: the board shows the public copy (generic names only). S.loading: nothing has been read yet. */
+const S = {items: [], meta: {}, L: layout([]), pub: false, loading: false};
+function setState(items, meta, pub){
+  if (pub !== undefined) S.pub = !!pub;
+  S.loading = false;
   S.items = cleanItems(items || []); if (meta) S.meta = meta; S.L = layout(S.items);
+  if (S.pub && editing) editing = false;
   render();
-  if (el('pv').open) show(cur);
+  if (el('pv').open) { if (S.pub) el('pv').close(); else show(cur); }
 }
 function render(){
   if (dragging) { renderPending = true; return; }
@@ -561,9 +750,13 @@ function seedDate(){
 }
 function renderSummary(){
   const L = S.L, t = L.stats;
-  const cell = (n, d) => '<td class="num">' + (d > 0 ? n + '<span class="pc">' + pct(n, d) + '</span>' : '<span class="pc">–</span>') + '</td>';
+  if (S.loading) {
+    el('sumBody').innerHTML = '<tr><td colspan="8" class="m">Loading the plan…</td></tr>'; el('sumFoot').innerHTML = '';
+    el('stats').innerHTML = ''; return;
+  }
+  const cell = (n, d) => '<td class="num">' + (d > 0 ? fmtPP(n) + '<span class="pc">' + pct(n, d) + '</span>' : '<span class="pc">–</span>') + '</td>';
   const dash = '<td class="num"><span class="pc">–</span></td>';
-  const sale = x => x.saleable > 0 ? '<td class="num">' + x.open + '</td><td class="num">' + x.sold + '</td><td class="num">' + pct(x.sold, x.saleable) + '</td>'
+  const sale = x => x.saleable > 0 ? '<td class="num">' + fmtPP(x.open) + '</td><td class="num">' + fmtPP(x.sold) + '</td><td class="num">' + pct(x.sold, x.saleable) + '</td>'
     : dash + dash + dash;
   el('sumBody').innerHTML = L.secs.map(s => '<tr><td>' + esc(secName(s.section)) + '</td><td class="num">' + pages(s.from, s.to) +
     '</td><td class="num">' + s.pp + '</td>' + sale(s) + cell(s.content, s.pp) + cell(s.layout, s.pp) + '</tr>').join('');
@@ -576,10 +769,10 @@ function renderStats(){
   const card = (cls, label, big, line, frac) => '<div class="stat ' + cls + '"><div class="sl">' + label + '</div><div class="sv">' + big +
     '</div><div class="sd">' + line + '</div>' + (frac == null ? '' : '<div class="sb"><i style="width:' + Math.round(clamp(frac, 0, 1) * 100) + '%"></i></div>') + '</div>';
   el('stats').innerHTML =
-    card('sold', 'Sold', pct(t.sold, t.saleable), t.sold + ' of ' + t.saleable + ' saleable pages', t.saleable ? t.sold / t.saleable : 0) +
-    card('content', 'Content done', pct(t.content, T), t.content + ' of ' + T + ' pages · ' + (T - t.content) + ' to go', T ? t.content / T : 0) +
-    card('layout', 'Layout done', pct(t.layout, T), t.layout + ' of ' + T + ' pages · ' + (T - t.layout) + ' to go', T ? t.layout / T : 0) +
-    (t.lockedItems ? card('locked', 'Locked', t.locked + ' pp', t.lockedItems + (t.lockedItems > 1 ? ' items are' : ' item is') + ' final', T ? t.locked / T : 0) : '') +
+    card('sold', 'Sold', pct(t.sold, t.saleable), fmtPP(t.sold) + ' of ' + fmtPP(t.saleable) + ' saleable pages', t.saleable ? t.sold / t.saleable : 0) +
+    card('content', 'Content done', pct(t.content, T), fmtPP(t.content) + ' of ' + T + ' pages · ' + fmtPP(T - t.content) + ' to go', T ? t.content / T : 0) +
+    card('layout', 'Layout done', pct(t.layout, T), fmtPP(t.layout) + ' of ' + T + ' pages · ' + fmtPP(T - t.layout) + ' to go', T ? t.layout / T : 0) +
+    (t.lockedItems ? card('locked', 'Locked', fmtPP(t.locked) + ' pp', t.lockedItems + (t.lockedItems > 1 ? ' items are' : ' item is') + ' final', T ? t.locked / T : 0) : '') +
     card('bal ' + (T % 2 ? 'bad' : 'good'), 'Page balance', T % 2 ? 'Odd' : 'Even', T + ' pages' + (T % 2 ? ': add or remove 1 page' : ''), null);
 }
 /* the key doubles as a filter: click a label to grey out every page that does not match it; click it again to show all */
@@ -591,7 +784,7 @@ function renderLegend(){
   const b = (f, cls, inner) => '<button type="button" class="lg' + (cls ? ' ' + cls : '') + (filt === f ? ' on' : '') + '" data-filter="' + f +
     '" aria-pressed="' + (filt === f) + '" title="' + (filt === f ? 'Show all pages' : 'Show only these pages') + '">' + inner + '</button>';
   el('legend').innerHTML = b('open', 'lg-open', '<span class="badge">OPEN</span>Still for sale') +
-    b('sold', 'lg-sold', '<span class="badge sold">SOLD</span>Sold to a client') +
+    b('sold', 'lg-sold', '<span class="badge sold">SOLD</span>' + (S.pub ? 'Sold' : 'Sold to a client')) +
     b('content', '', '<i class="mk c">C</i>Content done') + b('layout', '', '<i class="mk l">L</i>Layout done') +
     b('locked', 'lg-lock', LOCK_SVG + 'Locked') + (isLiveEditor() ? b('notes', '', '<i class="nc">1</i>Open notes') : '') +
     (filt ? '<button type="button" class="lg lg-clear" data-filter="">Show all</button>' : '');
@@ -604,7 +797,9 @@ document.addEventListener('keydown', ev => {
   if (ev.key === 'Escape' && filt && !document.querySelector('dialog[open]')) { filt = null; render(); }
 });
 function chipHTML(p, tag){
-  const it = S.L.P2I[p]; if (!it) return '';
+  const on = S.L.P2L[p]; if (!on || !on.length) return '';
+  if (on[0].part) return splitChipHTML(p, on);
+  const it = on[0];
   const k = p - it.from, c = k < it.contentPages, l = k < it.layoutPages, nn = p === it.from ? noteCount(it.id) : 0, lab = shortLabel(it);
   const cls = 'pg' + (it.open ? ' open' : '') + (it.locked ? ' locked' : '') + (c || l ? ' marked' : '') +
     (filt && FILTERS[filt] && !FILTERS[filt](it, k) ? ' dim' : '');
@@ -615,18 +810,65 @@ function chipHTML(p, tag){
   if (tag === 'div') return '<div class="' + cls + '"' + style + '>' + inner + '</div>';
   const extra = (it.open ? ', OPEN, still for sale' : '') + (c ? ', content done' : '') + (l ? ', layout done' : '') + (it.locked ? ', locked' : '') +
     (nn ? ', ' + nn + (nn > 1 ? ' open notes' : ' open note') : '');
-  return '<button class="' + cls + '" type="button"' + style + ' data-page="' + p + '" title="' + esc('p' + p + ' · ' + it.item + extra.replace(/^, /, ' · ').replace(/, /g, ' · ')) +
+  return '<button class="' + cls + '" type="button"' + style + ' data-page="' + p + '" title="' + esc('p' + p + ' · ' + (S.pub ? lab : it.item) + extra.replace(/^, /, ' · ').replace(/, /g, ' · ')) +
     '" aria-label="' + esc('Page ' + p + ', ' + lab + extra) + '">' + inner + '</button>';
 }
+const boxStyle = b => 'top:' + b.t + '%;left:' + b.l + '%;width:' + b.w + '%;height:' + b.h + '%';
+/* a page shared by half and quarter placements: one cell for each, and the free part hatched */
+function splitChipHTML(p, on){
+  const match = it => !(filt && FILTERS[filt] && !FILTERS[filt](it, 0));
+  const nn = on.reduce((a, it) => a + noteCount(it.id), 0), lock = on.some(it => it.locked);
+  const cells = on.map(it => {
+    const q = it.pp < 0.5, c = it.contentPages > 0, l = it.layoutPages > 0;
+    return '<span class="cell' + (q ? ' q' : '') + (it.open ? ' open' : '') + (it.locked ? ' locked' : '') + (match(it) ? '' : ' dim') +
+      '" style="--c:' + (TYPE_COLOR[it.type] || '#8A9099') + ';' + boxStyle(cellBox(it)) + '"><span class="ct">' + (q ? fmtPP(it.pp) : hyph(shortLabel(it))) + '</span>' +
+      (c || l ? '<span class="cm">' + (c ? '<i class="mk c">C</i>' : '') + (l ? '<i class="mk l">L</i>' : '') + '</span>' : '') + '</span>';
+  }).join('') + freeBoxes(on).map(b => '<span class="cell free" style="' + boxStyle(b) + '"><span class="ct">free</span></span>').join('');
+  const parts = on.map(it => fmtPP(it.pp) + ' ' + (S.pub ? shortLabel(it) : it.item) + ', ' + statusText(it));
+  const free = 1 - on.reduce((a, it) => a + it.pp, 0); if (free > 1e-9) parts.push(fmtPP(free) + ' free');
+  return '<button class="pg split' + (on.some(match) ? '' : ' dim') + '" type="button" data-page="' + p + '" title="' + esc('p' + p + ' · ' + parts.join(' · ')) +
+    '" aria-label="' + esc('Page ' + p + ', shared: ' + parts.join('; ')) + '"><span class="n">' + p + '</span>' +
+    (lock || nn ? '<span class="tr">' + (nn ? '<i class="nc">' + nn + '</i>' : '') + (lock ? LOCK_SVG : '') + '</span>' : '') +
+    '<span class="cells">' + cells + '</span></button>';
+}
+/* edit mode: a half or quarter placement is its own block; the small page icon shows where it sits */
+function fracChipHTML(it){
+  const c = it.contentPages > 0, l = it.layoutPages > 0, nn = noteCount(it.id);
+  const cls = 'pg frac' + (it.open ? ' open' : '') + (it.locked ? ' locked' : '') + (c || l ? ' marked' : '');
+  const marks = (it.locked || nn ? '<span class="tr">' + (nn ? '<i class="nc">' + nn + '</i>' : '') + (it.locked ? LOCK_SVG : '') + '</span>' : '') +
+    (c || l ? '<span class="br">' + (c ? '<i class="mk c">C</i>' : '') + (l ? '<i class="mk l">L</i>' : '') + '</span>' : '');
+  return '<div class="' + cls + '" style="--c:' + (TYPE_COLOR[it.type] || '#8A9099') + '"><span class="n">' + it.from +
+    ' <span class="pos" aria-hidden="true"><i style="' + boxStyle(cellBox(it)) + '"></i></span><b class="sz">' + fmtPP(it.pp) + '</b></span>' +
+    '<span class="t">' + hyph(shortLabel(it)) + '</span>' + marks + '</div>';
+}
+/* minimised sections: kept per browser */
+const MIN_KEY = 'mecsr-board-min';
+const MIN = new Set((() => { try { const a = JSON.parse(localStorage.getItem(MIN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } })());
+function saveMin(){ try { localStorage.setItem(MIN_KEY, JSON.stringify([...MIN])); } catch (e) {} }
+let renaming = null;                    // the section being renamed in Edit plan
 function bandLabel(s, edit){
-  return '<div class="bandlab">' + (edit ? '<span class="grip" title="Drag to move this section" aria-hidden="true">&#8942;&#8942;</span>' : '') +
-    esc(secName(s.section)) + '<span class="bp">pp ' + pages(s.from, s.to) + ' · ' + s.pp + ' pp</span>' +
-    (edit ? '<button class="addbtn" type="button" data-add="' + esc(s.section) + '">+ Add page</button>' : '') + '</div>';
+  const min = MIN.has(s.section), name = esc(secName(s.section)), rn = edit && renaming === s.section;
+  return '<div class="bandlab"><div class="bl1">' +
+    '<button class="mini" type="button" data-min="' + esc(s.section) + '" aria-expanded="' + !min + '" aria-label="' + (min ? 'Show ' : 'Minimise ') + name +
+      '" title="' + (min ? 'Show this section' : 'Minimise this section') + '">' + (min ? '+' : '&minus;') + '</button>' +
+    (edit ? '<span class="grip" title="Drag to move this section" aria-hidden="true">&#8942;&#8942;</span>' : '') +
+    (rn ? '' : '<span class="bn">' + name + '</span>') + '</div>' +
+    (rn ? '<div class="rnform"><input type="text" class="rni" value="' + name + '" maxlength="60" aria-label="New name for the section">' +
+      '<button class="addbtn" type="button" data-rename-ok="' + esc(s.section) + '">Save</button><button class="addbtn" type="button" data-rename-cancel>Cancel</button></div>' : '') +
+    '<span class="bp">pp ' + pages(s.from, s.to) + ' · ' + s.pp + ' pp</span>' +
+    (edit && !rn ? '<span class="bacts"><button class="addbtn" type="button" data-add="' + esc(s.section) + '">+ Add page</button>' +
+      '<button class="addbtn" type="button" data-rename="' + esc(s.section) + '">Rename</button></span>' : '') + '</div>';
+}
+function minSum(s){
+  return '<div class="minsum">' + (s.open ? '<span class="badge">OPEN</span><span>' + fmtPP(s.open) + ' pp still for sale</span>' : '') +
+    (s.sold ? '<span>' + fmtPP(s.sold) + ' pp sold</span>' : '') + '<span class="m">' + s.pp + (s.pp === 1 ? ' page' : ' pages') + ' minimised</span></div>';
 }
 function renderView(){
   sorts.forEach(x => x.destroy()); sorts = [];
   const b = el('board'); b.classList.remove('editing');
+  if (S.loading) { b.innerHTML = '<p class="m boardload">Loading the board…</p>'; return; }
   b.innerHTML = S.L.secs.map(s => {
+    if (MIN.has(s.section)) return '<div class="bandrow min">' + bandLabel(s, false) + minSum(s) + '</div>';
     let html = '', p = s.from;
     if (p === 1) { html += '<div class="spread">' + chipHTML(1) + '</div>'; p = 2; }
     while (p <= s.to) {
@@ -638,27 +880,32 @@ function renderView(){
 }
 function blockHTML(it){
   let inner = '';
-  if (it.pp <= 4) for (let p = it.from; p <= it.to; p++) inner += chipHTML(p, 'div');
+  if (it.part) inner = fracChipHTML(it);
+  else if (it.pp <= 4) for (let p = it.from; p <= it.to; p++) inner += chipHTML(p, 'div');
   else inner = chipHTML(it.from, 'div') + '<div class="more">+' + (it.pp - 2) + '<br>' + it.pp + ' pp</div>' + chipHTML(it.to, 'div');
-  const split = S.L.warnings.split.indexOf(it) >= 0;
-  const tip = 'pp ' + pages(it.from, it.to) + ' · ' + it.item + (split ? ' · starts on a right-hand page, so the spread is split' : '') +
+  const split = S.L.warnings.split.indexOf(it) >= 0, where = it.part ? 'p' + it.from + ' · ' + sizeName(it.pp) : 'pp ' + pages(it.from, it.to);
+  const tip = where + ' · ' + it.item + (split ? ' · starts on a right-hand page, so the spread is split' : '') +
     (it.locked ? ' · locked: unlock it in the page editor to move or change it' : '');
   return '<div class="blk' + (it.open ? ' open' : '') + (split ? ' split' : '') + (it.locked ? ' locked' : '') + '" data-id="' + esc(it.id) +
-    '" tabindex="0" role="button" title="' + esc(tip) + '" aria-label="' + esc('Pages ' + pages(it.from, it.to) + ', ' + it.item +
+    '" tabindex="0" role="button" title="' + esc(tip) + '" aria-label="' + esc((it.part ? 'Page ' + it.from + ', ' + sizeName(it.pp) : 'Pages ' + pages(it.from, it.to)) + ', ' + it.item +
     (it.locked ? ', locked. Enter to edit' : '. Drag to move; Enter to edit')) + '">' + inner + '</div>';
 }
 function renderEdit(){
   const b = el('board'); b.classList.add('editing');
-  b.innerHTML = S.L.secs.map(s => '<div class="bandrow" data-section="' + esc(s.section) + '">' + bandLabel(s, true) +
-    '<div class="blks" data-section="' + esc(s.section) + '">' + s.items.map(blockHTML).join('') + '</div></div>').join('');
+  b.innerHTML = S.L.secs.map(s => '<div class="bandrow' + (MIN.has(s.section) ? ' min' : '') + '" data-section="' + esc(s.section) + '">' + bandLabel(s, true) +
+    (MIN.has(s.section) ? minSum(s) : '<div class="blks" data-section="' + esc(s.section) + '">' + s.items.map(blockHTML).join('') + '</div>') + '</div>').join('');
   setupSortable();
+  const r = b.querySelector('.rni'); if (r && document.activeElement !== r) { r.focus(); r.select(); }
 }
 function renderWarn(){
   const w = S.L.warnings, parts = [];
+  if (S.pub || S.loading) { el('warn').innerHTML = ''; el('warn').hidden = true; return; }       // warnings are for the team
   const link = it => '<a data-goto="' + esc(it.id) + '">' + esc(shortLabel(it)) + ' pp ' + pages(it.from, it.to) + '</a>';
   if (editing && w.split.length) parts.push('<b>' + w.split.length + (w.split.length > 1 ? ' spreads are' : ' spread is') +
     ' split</b> (a two-page item starts on a right-hand page): ' + w.split.map(link).join(''));
   if (editing && w.odd) parts.push('<b>The page count is odd (' + S.L.total + ').</b> Add or remove one page.');
+  if (editing && w.gaps.length) parts.push('<b>' + w.gaps.length + (w.gaps.length > 1 ? ' pages are' : ' page is') + ' only partly filled:</b> ' +
+    w.gaps.map(g => '<a data-goto="' + esc(g.it.id) + '">p' + g.page + ', ' + fmtPP(g.free) + ' page free</a>').join(''));
   if (w.moved.length) parts.push('<b>' + w.moved.length + ' locked ' + (w.moved.length > 1 ? 'items have' : 'item has') +
     ' moved since locking:</b> ' + w.moved.map(it => '<a data-goto="' + esc(it.id) + '">' + esc(shortLabel(it)) + ' p' + it.lockedFrom + ' → p' + it.from + '</a>').join(''));
   el('warn').innerHTML = parts.join('<br>'); el('warn').hidden = !parts.length;
@@ -672,15 +919,25 @@ function refreshLastName(){
 }
 function renderToolbar(){
   const k = store ? store.kind : 'off', u = store && store.user, can = !!(store && store.canEdit());
+  const prev = !!(store && store.preview), full = (k === 'practice' || can) && !prev;
   refreshLastName();
   el('btnSignIn').hidden = !(k === 'live' && !u);
-  el('btnEdit').hidden = !can;
+  el('btnEdit').hidden = !can || prev;
   el('btnEdit').textContent = editing ? 'Done' : 'Edit plan';
   el('btnEdit').classList.toggle('on', editing);
-  el('btnHistory').hidden = !can;
-  el('btnPeople').hidden = !(store && store.isOwner && store.isOwner());
+  el('btnPublic').hidden = !(k === 'live' && can);
+  el('btnPublic').textContent = prev ? 'Back to full view' : 'Public view';
+  el('btnPublic').classList.toggle('on', prev);
+  el('pubNote').hidden = !prev;
+  el('btnHistory').hidden = !can || prev;
+  el('btnPeople').hidden = !(store && store.isOwner && store.isOwner()) || prev;
   el('btnReset').hidden = !(k === 'practice' && store.dirty());
-  el('btnMentions').hidden = !isLiveEditor();
+  el('btnMentions').hidden = !isLiveEditor() || prev;
+  el('btnXlsx').hidden = el('btnPdf').hidden = !full;            // the reports carry client names: the team only
+  el('sidebtns').hidden = [...el('sidebtns').children].every(x => x.hidden);
+  const owner = !!(store && store.isOwner && store.isOwner());
+  el('t2').hidden = !owner;
+  if (!owner && !el('p2').hidden) selectTab(0);
   const ub = el('userBox'); ub.hidden = !(k === 'live' && u);
   if (u) ub.innerHTML = esc(u.name || u.email) + (can ? '' : ' · <span style="color:var(--red)">view only</span>') + ' · <a id="signOut">Sign out</a>';
   let s = k === 'live' ? '<span class="pill live">Live</span>' : k === 'practice' ? '<span class="pill practice">Practice</span>' : '<span class="pill off">Saved copy</span>';
@@ -731,7 +988,7 @@ function onDropSection(e){
 }
 async function setEditing(on){
   if (on) { try { await loadScript('lib/Sortable.min.js'); } catch (e) { toast('Drag and drop could not load; use Earlier and Later in the page editor.', true); } }
-  editing = !!on && !!(store && store.canEdit()); render();
+  editing = !!on && !!(store && store.canEdit()) && !S.pub; renaming = null; render();
 }
 function newItemAfter(afterId, section){
   const ref = S.items.find(x => x.id === afterId);
@@ -745,10 +1002,10 @@ async function addAfter(afterId, section){
 
 /* the page editor */
 const ed = el('ed'); let edId = null, edPP = 1;
-const ED_FIELDS = ['fName', 'fSection', 'fNewSection', 'fType', 'fPP', 'ppDown', 'ppUp', 'fClient', 'fSample', 'fNote', 'fPdfBtn', 'fPdfDel'];
+const ED_FIELDS = ['fName', 'fSection', 'fNewSection', 'fType', 'fPP', 'ppDown', 'ppUp', 'ppHalf', 'ppQuarter', 'fClient', 'fSample', 'fNote', 'fPdfBtn', 'fPdfDel'];
 function progHTML(kind, n, pp){
   const id = kind === 'content' ? 'fContent' : 'fLayout', label = kind === 'content' ? 'Content done' : 'Layout done';
-  if (pp === 1 || (pp === 2 && n !== 1)) return '<label class="chk"><input type="checkbox" id="' + id + '"' + (n >= pp ? ' checked' : '') + '> ' + label + '</label>';
+  if (pp <= 1 || (pp === 2 && n !== 1)) return '<label class="chk"><input type="checkbox" id="' + id + '"' + (n >= pp ? ' checked' : '') + '> ' + label + '</label>';
   return '<input type="number" id="' + id + '" min="0" max="' + pp + '" step="1" value="' + n + '" aria-label="' + label + ': pages done">' +
     '<span class="status">of ' + pp + ' pages</span><button class="nb" type="button" data-allof="' + id + '">All</button>';
 }
@@ -773,8 +1030,8 @@ function applyLock(){
 function openEditor(id){
   const it = S.L.items.find(x => x.id === id); if (!it) return;
   edId = id; edPP = it.pp;
-  el('edTitle').textContent = 'Pages ' + pages(it.from, it.to);
-  el('edMeta').textContent = secName(it.section) + ' · ' + it.pp + (it.pp === 1 ? ' page' : ' pages') + (S.L.warnings.split.indexOf(it) >= 0 ? ' · spread split' : '') +
+  el('edTitle').textContent = it.part ? 'Page ' + it.from + ' · ' + sizeName(it.pp) : 'Pages ' + pages(it.from, it.to);
+  el('edMeta').textContent = secName(it.section) + ' · ' + sizeName(it.pp) + (S.L.warnings.split.indexOf(it) >= 0 ? ' · spread split' : '') +
     (it.locked ? ' · locked' : '');
   el('fName').value = it.item;
   const secs = []; S.items.forEach(x => { if (secs.indexOf(x.section) < 0) secs.push(x.section); });
@@ -783,7 +1040,7 @@ function openEditor(id){
   const types = ORDER.indexOf(it.type) < 0 ? ORDER.concat([it.type]) : ORDER;
   el('fType').innerHTML = types.map(t => '<option value="' + esc(t) + '">' + esc(TYPE_LABEL[t] || t) + '</option>').join('');
   el('fType').value = it.type;
-  el('fPP').value = it.pp;
+  el('fPP').value = fmtPP(it.pp); renderSizeBtns();
   const st = it.sponsor === 'OPEN' ? 'open' : it.sponsor ? 'sold' : 'house';
   document.querySelectorAll('#ed input[name=st]').forEach(r => { r.checked = r.value === st; });
   el('fClient').value = st === 'sold' ? it.sponsor : ''; el('fClient').hidden = st !== 'sold';
@@ -801,11 +1058,11 @@ function readEditor(){
   let section = el('fSection').value;
   if (section === '__new') section = el('fNewSection').value.trim();
   const st = (document.querySelector('#ed input[name=st]:checked') || {}).value || 'house';
-  const pp = clamp(parseInt(el('fPP').value, 10) || 1, 1, 400);
+  const pp = parsePP(el('fPP').value);
   const s0 = parseInt(el('fSample').value, 10);
   return {item: el('fName').value.trim(), section, type: el('fType').value, pp,
     sponsor: st === 'open' ? 'OPEN' : st === 'sold' ? el('fClient').value.trim() : '',
-    sample: s0 > 0 ? [s0, Math.min(SAMPLE_PAGES, s0 + pp - 1)] : null, note: el('fNote').value.trim(),
+    sample: s0 > 0 ? [s0, Math.min(SAMPLE_PAGES, s0 + Math.max(1, Math.ceil(pp)) - 1)] : null, note: el('fNote').value.trim(),
     contentPages: Math.min(readProg('fContent', edPP), pp), layoutPages: Math.min(readProg('fLayout', edPP), pp), locked: el('fLocked').checked, _st: st};
 }
 el('edForm').addEventListener('submit', ev => {
@@ -904,18 +1161,27 @@ document.querySelectorAll('#ed input[name=st]').forEach(r => r.addEventListener(
 }));
 function setPP(n){
   const c = readProg('fContent', edPP), l = readProg('fLayout', edPP);
-  edPP = clamp(n, 1, 400); el('fPP').value = edPP; renderProg(c, l);
+  edPP = normPP(n); el('fPP').value = fmtPP(edPP); renderProg(progNorm(c >= edPP ? edPP : c, edPP), progNorm(l >= edPP ? edPP : l, edPP)); renderSizeBtns();
 }
-el('ppDown').addEventListener('click', () => setPP((parseInt(el('fPP').value, 10) || 1) - 1));
-el('ppUp').addEventListener('click', () => setPP((parseInt(el('fPP').value, 10) || 1) + 1));
-el('fPP').addEventListener('change', () => setPP(parseInt(el('fPP').value, 10) || 1));
+function renderSizeBtns(){
+  const n = parsePP(el('fPP').value);
+  el('ppHalf').setAttribute('aria-pressed', String(n === 0.5)); el('ppQuarter').setAttribute('aria-pressed', String(n === 0.25));
+}
+/* minus from 1 page goes to a half, then a quarter; plus goes back up */
+const ppStep = (n, d) => d > 0 ? (n < 0.5 ? 0.5 : n < 1 ? 1 : n + 1) : (n > 1 ? n - 1 : n === 1 ? 0.5 : 0.25);
+el('ppDown').addEventListener('click', () => setPP(ppStep(parsePP(el('fPP').value), -1)));
+el('ppUp').addEventListener('click', () => setPP(ppStep(parsePP(el('fPP').value), 1)));
+el('ppHalf').addEventListener('click', () => setPP(0.5));
+el('ppQuarter').addEventListener('click', () => setPP(0.25));
+el('fPP').addEventListener('change', () => setPP(parsePP(el('fPP').value)));
 el('fLocked').addEventListener('change', () => { applyLock(); renderPdfRow(); });
 el('ed').addEventListener('click', ev => { const b = ev.target.closest('[data-allof]'); if (b) el(b.dataset.allof).value = edPP; });
 el('edClose').addEventListener('click', () => ed.close());
 el('edCancel').addEventListener('click', () => ed.close());
 el('edDelete').addEventListener('click', () => {
   const it = S.L.items.find(x => x.id === edId); if (!it) return;
-  el('edConfirmText').textContent = 'Delete "' + it.item + '" (pp ' + pages(it.from, it.to) + ')? Every page after it moves up ' + it.pp + '.';
+  el('edConfirmText').textContent = it.part ? 'Delete "' + it.item + '" (p' + it.from + ', ' + sizeName(it.pp) + ')? The placements after it move up.'
+    : 'Delete "' + it.item + '" (pp ' + pages(it.from, it.to) + ')? Every page after it moves up ' + it.pp + '.';
   el('edConfirm').hidden = false;
 });
 el('edNo').addEventListener('click', () => { el('edConfirm').hidden = true; });
@@ -1021,24 +1287,61 @@ el('warn').addEventListener('click', ev => {
 });
 
 /* the board: view mode opens sample pages (with notes and statuses for editors), edit mode opens the page editor */
+function toggleMin(sec, on){
+  if (on) MIN.add(sec); else MIN.delete(sec);
+  saveMin(); render();
+  const b = document.querySelector('#board [data-min="' + CSS.escape(sec) + '"]'); if (b) b.focus();
+}
+function renameSection(sec){
+  const inp = el('board').querySelector('.rni'); if (!inp) return;
+  const name = inp.value.trim().replace(/\s+/g, ' '), m = /^(\d\d)\s+/.exec(sec);
+  if (!name) { inp.focus(); return; }
+  const to = m && !/^\d\d\s/.test(name) ? m[1] + ' ' + name : name;
+  renaming = null;
+  if (to === sec) { render(); return; }
+  if (MIN.has(sec)) { MIN.delete(sec); MIN.add(to); saveMin(); }
+  act({type: 'renameSection', section: sec, to});
+}
 el('board').addEventListener('click', ev => {
+  const mn = ev.target.closest('[data-min]');
+  if (mn) { toggleMin(mn.dataset.min, !MIN.has(mn.dataset.min)); return; }
   if (editing) {
+    const rn = ev.target.closest('[data-rename]');
+    if (rn) { renaming = rn.dataset.rename; render(); return; }
+    const ok = ev.target.closest('[data-rename-ok]');
+    if (ok) { renameSection(ok.dataset.renameOk); return; }
+    if (ev.target.closest('[data-rename-cancel]')) { renaming = null; render(); return; }
+    if (ev.target.closest('.rnform')) return;
     const add = ev.target.closest('[data-add]');
     if (add) { const sec = add.dataset.add; const its = S.items.filter(x => x.section === sec); addAfter(its.length ? its[its.length - 1].id : null, sec); return; }
     const b = ev.target.closest('.blk'); if (b && Date.now() - lastDrag > 350) openEditor(b.dataset.id);
     return;
   }
   const c = ev.target.closest('.pg[data-page]'); if (!c) return;
-  if (store && store.kind === 'live' && !store.canEdit()) {
-    if (!store.user) { toast('Sign in with your MECSR Google account to see page details'); store.signIn().catch(e => toast('Not signed in: ' + friendly(e), true)); }
+  if (S.pub || (store && store.kind === 'live' && !store.canEdit())) {
+    if (store && store.preview) toast('This is the public view. Page details are hidden here, as they are for anyone who is not signed in.');
+    else if (!store || !store.user) { toast('Sign in with your MECSR Google account to see page details'); if (store && store.signIn) store.signIn().catch(e => toast('Not signed in: ' + friendly(e), true)); }
     else toast('This account cannot see page details. Ask ' + OWNER + ' to approve it.', true);
     return;
   }
   openViewer(+c.dataset.page, c);
 });
 el('board').addEventListener('keydown', ev => {
+  const rni = ev.target.closest && ev.target.closest('.rni');
+  if (rni) {
+    if (ev.key === 'Enter') { ev.preventDefault(); const ok = el('board').querySelector('[data-rename-ok]'); if (ok) renameSection(ok.dataset.renameOk); }
+    if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); renaming = null; render(); }
+    return;
+  }
   if (!editing || ev.key !== 'Enter') return;
   const b = ev.target.closest('.blk'); if (b) { ev.preventDefault(); openEditor(b.dataset.id); }
+});
+el('minAll').addEventListener('click', () => { S.L.secs.forEach(s => MIN.add(s.section)); saveMin(); render(); });
+el('maxAll').addEventListener('click', () => { MIN.clear(); saveMin(); render(); });
+el('btnPublic').addEventListener('click', () => {
+  if (!store || !store.setPreview) return;
+  editing = false; renaming = null;
+  store.setPreview(!store.preview); render();
 });
 
 /* ---------------- sample pages from the v14 book, with statuses and notes beside them ---------------- */
@@ -1073,14 +1376,26 @@ function fetchSample(id, force){
     .then(d => { SMP.set(id, d && Array.isArray(d.pages) && d.pages.length ? d : null); smpWait.delete(id); return SMP.get(id); });
   smpWait.set(id, pr); return pr;
 }
-function upImg(p){
-  const it = S.L.P2I[p], d = it && canSample() ? SMP.get(it.id) : null;
-  const u = d ? d.pages[p - it.from] : null;            // only a real image data URL is shown; anything else is ignored
+function itemImg(it, p){
+  const d = it && canSample() ? SMP.get(it.id) : null;
+  const u = d ? d.pages[it.part ? 0 : p - it.from] : null;    // only a real image data URL is shown; anything else is ignored
   return typeof u === 'string' && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+\/=]+$/.test(u) ? u : null;
+}
+const upImg = p => (S.L.P2L[p] || []).map(it => itemImg(it, p)).find(Boolean) || null;
+/* a page shared by half and quarter placements: each placement in its place, with its uploaded sample if there is one */
+function partLeafHTML(p, on){
+  const cells = on.map(it => {
+    const up = itemImg(it, p);
+    return '<div class="lcell' + (it.open ? ' isopen' : '') + '" style="' + boxStyle(cellBox(it)) + '">' + (up ? '<img src="' + esc(up) + '" alt="' +
+      esc('Page ' + p + ', ' + it.item + ', uploaded sample') + '">' : '<span class="phl"><b>' + (it.open ? 'OPEN' : '&nbsp;') + '</b><span>' +
+      esc(fmtPP(it.pp) + ' · ' + shortLabel(it)) + '</span></span>') + (up && it.open ? '<span class="rib">OPEN</span>' : '') + '</div>';
+  }).join('') + freeBoxes(on).map(b => '<div class="lcell free" style="' + boxStyle(b) + '"><span class="phl"><span>' + fmtPP(b.free) + ' page free</span></span></div>').join('');
+  return '<figure class="leaf parts">' + cells + '</figure>';
 }
 function leafHTML(p){
   const it = S.L.P2I[p];
   if (!it) return '<figure class="leaf ph"><span class="phl"><span>outside the book</span></span></figure>';
+  if (it.part) return partLeafHTML(p, S.L.P2L[p]);
   const up = upImg(p);
   if (up) return '<figure class="leaf"><img src="' + esc(up) + '" alt="' + esc('Page ' + p + ', ' + it.item + ', uploaded sample') + '">' +
     (it.open ? '<span class="rib">OPEN</span>' : '') + '</figure>';
@@ -1098,17 +1413,18 @@ function show(page){
   const wrap = el('bookwrap'), html = sp.map(leafHTML).join('');
   wrap.classList.toggle('single', sp.length === 1);
   if (html !== shownKey) { wrap.innerHTML = html; shownKey = html; }      // unchanged pages are not redrawn
-  const items = [...new Set(sp.map(p => S.L.P2I[p]).filter(Boolean))], it = items[0];
+  const items = [...new Set(sp.flatMap(p => S.L.P2L[p] || []))], it = items[0];
   if (it) {
     el('pvTitle').innerHTML = esc(shortLabel(it)) + (it.open ? '<span class="badge">OPEN</span>' : '') +
-      (items[1] ? ' <span style="color:var(--mute);font-weight:400">+ ' + esc(shortLabel(items[1])) + '</span>' + (items[1].open ? '<span class="badge">OPEN</span>' : '') : '');
-    el('pvMeta').textContent = items.map(x => secName(x.section) + ' · pp ' + pages(x.from, x.to)).join('   |   ');
+      (items.length === 2 ? ' <span style="color:var(--mute);font-weight:400">+ ' + esc(shortLabel(items[1])) + '</span>' + (items[1].open ? '<span class="badge">OPEN</span>' : '')
+        : items.length > 2 ? ' <span style="color:var(--mute);font-weight:400">+ ' + (items.length - 1) + ' more</span>' : '');
+    el('pvMeta').textContent = items.map(x => secName(x.section) + ' · ' + (x.part ? 'p' + x.from + ' ' + fmtPP(x.pp) : 'pp ' + pages(x.from, x.to))).join('   |   ');
     document.querySelector('#pv .pvhead').style.borderLeftColor = it.open ? '#17795E' : (TYPE_COLOR[it.type] || '#12365E');
   }
   const ups = sp.filter(upImg), smp = sp.filter(p => !upImg(p)).map(samplePage).filter(Boolean);
   el('pvCap').textContent = [ups.length ? 'UPLOADED SAMPLE · ' + (ups.length > 1 ? 'PAGES ' + ups[0] + '–' + ups[1] : 'PAGE ' + ups[0]) : '',
     smp.length ? 'SAMPLE BOOK V14 · ' + (smp.length > 1 ? 'PAGES ' + smp[0] + '–' + smp[smp.length - 1] : 'PAGE ' + smp[0]) : ''].filter(Boolean).join('   |   ');
-  if (canSample()) items.forEach(x => { if (!SMP.has(x.id)) fetchSample(x.id).then(() => { if (pv.open && spreadOf(cur).some(q => S.L.P2I[q] === x)) show(cur); }); });
+  if (canSample()) items.forEach(x => { if (!SMP.has(x.id)) fetchSample(x.id).then(() => { if (pv.open && spreadOf(cur).some(q => (S.L.P2L[q] || []).indexOf(x) >= 0)) show(cur); }); });
   el('pvCount').textContent = (sp.length > 1 ? 'PAGES ' + sp[0] + '–' + sp[1] : 'PAGE ' + sp[0]) + ' / ' + S.L.total;
   el('pvPrev').disabled = sp[0] <= 1; el('pvNext').disabled = sp[sp.length - 1] >= S.L.total;
   renderSide(items, sp);
@@ -1179,7 +1495,7 @@ function markControls(it){
   const dis = it.locked || !editing ? ' disabled' : '';
   const one = (kind, label) => {
     const n = kind === 'content' ? it.contentPages : it.layoutPages;
-    if (it.pp === 1 || (it.pp === 2 && n !== 1))
+    if (it.pp <= 1 || (it.pp === 2 && n !== 1))
       return '<button class="tg ' + kind + '" type="button" data-mark="' + kind + '" aria-pressed="' + (n >= it.pp) + '"' + dis + '>' +
         (n >= it.pp ? '&#10003; ' : '') + label + '</button>';
     return '<span class="tgn"><span class="tl">' + label + '</span><input type="number" min="0" max="' + it.pp + '" value="' + n + '" data-markn="' + kind + '"' +
@@ -1196,7 +1512,7 @@ function fillSide(){
     const it = S.L.items.find(x => x.id === sec.dataset.id);
     if (!it) { sec.querySelector('.shd').innerHTML = '<b>No longer in the plan</b>'; sec.querySelector('.smk').innerHTML = ''; }
     else {
-      sec.querySelector('.shd').innerHTML = '<b>' + esc(it.item) + '</b><span class="m">pp ' + pages(it.from, it.to) + ' · ' + esc(statusText(it)) + '</span>';
+      sec.querySelector('.shd').innerHTML = '<b>' + esc(it.item) + '</b><span class="m">' + (it.part ? 'p' + it.from + ' · ' + sizeName(it.pp) : 'pp ' + pages(it.from, it.to)) + ' · ' + esc(statusText(it)) + '</span>';
       const mk = sec.querySelector('.smk'); if (!mk.contains(document.activeElement) || document.activeElement.tagName !== 'INPUT') mk.innerHTML = markControls(it);
     }
     sec.querySelector('.snotes').innerHTML = notesHTML(sec.dataset.id);
@@ -1257,7 +1573,7 @@ function fmtMsg(m){
   });
   return s.replace(/\n/g, '<br>');
 }
-function itemName(id){ const it = S.L.items.find(x => x.id === id); return it ? shortLabel(it) + ' (pp ' + pages(it.from, it.to) + ')' : 'a page no longer in the plan'; }
+function itemName(id){ const it = S.L.items.find(x => x.id === id); return it ? shortLabel(it) + (it.part ? ' (p' + it.from + ', ' + fmtPP(it.pp) + ')' : ' (pp ' + pages(it.from, it.to) + ')') : 'a page no longer in the plan'; }
 
 /* a composer: a text box with @ suggestions; also used to edit a note or message */
 function composerHTML(kind, key, ph, itemId, extra){
@@ -1507,16 +1823,25 @@ function openChat(on){
 el('chatBtn').addEventListener('click', () => openChat(true));
 el('chatMin').addEventListener('click', () => openChat(false));
 
-/* ---------------- the production timeline (printed book only), to the release date ---------------- */
+/* ---------------- the production timeline (printed book only), to the release date ----------------
+   Kept simple: each task shows its due date, status and bar. Dates, team, notes, moving and deleting are in the
+   task's own window (click the task). Phases fold away; which ones are folded is kept per browser. */
 const TL = {rows: null, meta: {}};
 let tlPending = false;
 const slug = s => String(s || '').toLowerCase().replace(/[^a-z]+/g, '-');
 const tlCanEdit = () => !!(store && (store.kind === 'practice' || isLiveEditor()));
-function setTimeline(rows, meta){ TL.rows = rows ? cleanRows(rows) : null; TL.meta = meta || {}; renderTimeline(); }
+function setTimeline(rows, meta){ TL.rows = rows ? cleanRows(rows) : null; TL.meta = meta || {}; renderTimeline(); if (tled.open) fillTlEd(false); }
 function releaseDate(){ const r = (TL.rows || []).find(x => x.id === 'tl-release'); return r ? r.due : RELEASE; }
+const TLC_KEY = 'mecsr-tl-folded';
+const TLC = new Set((() => { try { const a = JSON.parse(localStorage.getItem(TLC_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } })());
+function saveTlc(){ try { localStorage.setItem(TLC_KEY, JSON.stringify([...TLC])); } catch (e) {} }
+function tlGroups(rows){
+  const g = []; rows.forEach(r => { let x = g[g.length - 1]; if (!x || x.phase !== r.phase) g.push(x = {phase: r.phase, rows: []}); x.rows.push(r); });
+  return g;
+}
 function renderTimeline(){
   const wrap = el('tlWrap'), can = tlCanEdit();
-  el('tlGate').hidden = can; el('tlAdd').hidden = !can || !TL.rows;
+  el('tlGate').hidden = can; el('tlAdd').hidden = !can || !TL.rows; el('tlFold').hidden = !can || !TL.rows || !TL.rows.length;
   if (!can) {
     const viewer = store && store.kind === 'live' && store.user;
     el('tlGate').innerHTML = viewer ? 'The production timeline is for the MECSR team. This account can view the flat plan only.'
@@ -1533,54 +1858,52 @@ function renderTimeline(){
   if (!rows.length) { wrap.innerHTML = '<p class="m tlload">No tasks yet. Use “+ Add task”.</p>'; return; }
   let s0 = Math.min(...rows.map(r => dayNum(r.start)), dayNum(today)), s1 = Math.max(...rows.map(r => dayNum(r.due)), dayNum(rel)) + 3;
   s0 -= (new Date(s0 * 864e5).getUTCDay() + 6) % 7;                       // start on a Monday
-  const span = Math.max(7, s1 - s0), X = d => ((dayNum(d) - s0) / span * 100).toFixed(3) + '%', W = r => ((dayNum(r.due) - dayNum(r.start) + 1) / span * 100).toFixed(3) + '%';
+  const span = Math.max(7, s1 - s0), X = d => ((dayNum(d) - s0) / span * 100).toFixed(3) + '%';
+  const Wd = (a0, b0) => ((dayNum(b0) - dayNum(a0) + 1) / span * 100).toFixed(3) + '%';
   const isoOf = n => new Date(n * 864e5).toISOString().slice(0, 10);
   let months = '';
   for (let n = s0; n <= s1; n++) { const d = isoOf(n); if ((d.slice(8) === '01' || n === s0) && (n - s0) / span < 0.9) months += '<span class="mo" style="left:' + X(d) + '">' + MON[+d.slice(5, 7) - 1] + (d.slice(5, 7) === '01' || n === s0 ? ' ' + d.slice(2, 4) : '') + '</span>'; }
-  let weeks = ''; for (let n = s0; n <= s1; n += 7) weeks += '<i class="wk" style="left:' + X(isoOf(n)) + '"></i>';
-  const marks = weeks + (today >= isoOf(s0) && today <= isoOf(s1) ? '<i class="today" style="left:' + X(today) + '" title="Today"></i>' : '') +
+  const marks = (today >= isoOf(s0) && today <= isoOf(s1) ? '<i class="today" style="left:' + X(today) + '" title="Today"></i>' : '') +
     '<i class="rel" style="left:' + X(rel) + '" title="Release ' + esc(dLabel(rel)) + '"></i>';
-  let phase = null, html = '';
-  const dcell = (r, f, over) => '<td class="dt"><button type="button" class="dbtn' + (over ? ' over' : '') + '" data-pick="' + f + '" title="' +
-    (over ? 'Overdue. ' : '') + 'Change the ' + (f === 'start' ? 'start' : 'due') + ' date">' + esc(dLabel(r[f])) + '</button>' +
-    '<input type="date" class="dpick" data-f="' + f + '" value="' + r[f] + '" tabindex="-1" aria-label="' + (f === 'start' ? 'Start date' : 'Due date') + '"></td>';
-  rows.forEach((r, k) => {
-    if (r.phase !== phase) { phase = r.phase; html += '<tr class="ph"><td colspan="8">' + esc(phase || 'No phase') + '</td></tr>'; }
+  const row = r => {
     const over = r.status !== 'Done' && r.due < today, ms = r.milestone || r.start === r.due;
     const bar = ms ? '<i class="dia s-' + slug(r.status) + '" style="left:' + X(r.due) + '"></i>'
-      : '<i class="bar s-' + slug(r.status) + '" style="left:' + X(r.start) + ';width:' + W(r) + '"></i>';
-    html += '<tr data-id="' + esc(r.id) + '" class="' + (r.done ? 'isdone' : '') + (over ? ' isover' : '') + (ms ? ' isms' : '') + '">' +
-      '<td class="tk"><input type="text" class="tki" data-f="task" value="' + esc(r.task) + '" title="' + esc(r.task) + '" maxlength="160" aria-label="Task">' +
-      '<input type="text" class="tmi" data-f="team" value="' + esc(r.team) + '" placeholder="Team" maxlength="60" aria-label="Team" list="tlTeams"></td>' +
-      dcell(r, 'start', false) + dcell(r, 'due', over) +
-      '<td class="g"><div class="track">' + marks + bar + '</div></td>' +
+      : '<i class="bar s-' + slug(r.status) + '" style="left:' + X(r.start) + ';width:' + Wd(r.start, r.due) + '"></i>';
+    return '<tr data-id="' + esc(r.id) + '" class="' + (r.done ? 'isdone' : '') + (over ? ' isover' : '') + (ms ? ' isms' : '') + '">' +
+      '<td class="tk"><button type="button" class="tkb" data-open title="' + esc(r.task + (r.notes ? '\n\nNote: ' + r.notes : '') + '\n\nClick for dates, team and notes') + '">' +
+        '<span class="tkn">' + esc(r.task) + '</span>' + (r.team ? '<span class="tkt">' + esc(r.team) + '</span>' : '') +
+        (r.notes ? '<span class="tkno" aria-label="has a note">note</span>' : '') + '</button></td>' +
+      '<td class="dt"><button type="button" class="dbtn' + (over ? ' over' : '') + '" data-pick title="' + (over ? 'Overdue. ' : '') + 'Change the due date">' + esc(dShort(r.due)) + '</button>' +
+        '<input type="date" class="dpick" data-f="due" value="' + r.due + '" tabindex="-1" aria-label="Due date"></td>' +
       '<td class="stc"><select data-f="status" class="s-' + slug(r.status) + '" aria-label="Status">' +
-        TL_STATUS.map(s => '<option' + (s === r.status ? ' selected' : '') + '>' + s + '</option>').join('') + '</select></td>' +
-      '<td class="ck"><input type="checkbox" data-f="done"' + (r.done ? ' checked' : '') + ' aria-label="Done"></td>' +
-      '<td class="nt"><input type="text" data-f="notes" value="' + esc(r.notes) + '" maxlength="500" placeholder="Add a note" aria-label="Notes"></td>' +
-      '<td class="acts"><button type="button" data-tl="up" title="Move up" aria-label="Move up"' + (k === 0 ? ' disabled' : '') + '>&#8593;</button>' +
-      '<button type="button" data-tl="down" title="Move down" aria-label="Move down"' + (k === rows.length - 1 ? ' disabled' : '') + '>&#8595;</button>' +
-      '<button type="button" data-tl="add" title="Add a task after this one" aria-label="Add a task after this one">+</button>' +
-      '<button type="button" data-tl="del" title="Delete this task" aria-label="Delete this task">&#10005;</button></td></tr>';
+        TL_STATUS.map(x => '<option' + (x === r.status ? ' selected' : '') + '>' + x + '</option>').join('') + '</select></td>' +
+      '<td class="g"><div class="track">' + marks + bar + '</div></td></tr>';
+  };
+  let html = '';
+  tlGroups(rows).forEach(g => {
+    const folded = TLC.has(g.phase), done = g.rows.filter(r => r.status === 'Done').length;
+    const over = g.rows.filter(r => r.status !== 'Done' && r.due < today).length;
+    const gs = g.rows.reduce((m, r) => r.start < m ? r.start : m, g.rows[0].start), ge = g.rows.reduce((m, r) => r.due > m ? r.due : m, g.rows[0].due);
+    html += '<tr class="ph' + (folded ? ' folded' : '') + '"><td colspan="3"><button type="button" class="phb" data-phase="' + esc(g.phase) + '" aria-expanded="' + !folded + '">' +
+      '<span class="car" aria-hidden="true">&#9662;</span>' + esc(g.phase || 'No phase') + '<span class="phm">' + done + ' of ' + g.rows.length + ' done' +
+      (over ? ' · <b>' + over + ' overdue</b>' : '') + ' · ' + esc(dShort(gs)) + ' to ' + esc(dShort(ge)) + '</span></button></td>' +
+      '<td class="g"><div class="track ph">' + marks + '<i class="pbar' + (done === g.rows.length ? ' s-done' : '') + '" style="left:' + X(gs) + ';width:' + Wd(gs, ge) + '"></i></div></td></tr>';
+    if (!folded) g.rows.forEach(r => { html += row(r); });
   });
-  const teams = [...new Set(rows.map(r => r.team).filter(Boolean))];
-  wrap.innerHTML = '<datalist id="tlTeams">' + teams.map(t => '<option value="' + esc(t) + '">').join('') + '</datalist>' +
-    '<table class="tl"><colgroup><col><col class="c-dt"><col class="c-dt"><col class="c-g"><col class="c-st"><col class="c-ck"><col class="c-nt"><col class="c-ac"></colgroup>' +
-    '<thead><tr><th>Task · team</th><th>Start</th><th>Due</th><th class="g"><div class="months">' + months + '</div></th>' +
-    '<th>Status</th><th>Done</th><th>Notes</th><th class="acts"><span class="sr">Actions</span></th></tr></thead><tbody>' + html + '</tbody></table>';
+  wrap.innerHTML = '<table class="tl"><colgroup><col><col class="c-dt"><col class="c-st"><col class="c-g"></colgroup>' +
+    '<thead><tr><th>Task</th><th>Due</th><th>Status</th><th class="g"><div class="months">' + months + '</div></th></tr></thead><tbody>' + html + '</tbody></table>';
 }
 function renderTlSummary(){
   const rows = TL.rows, today = todayISO(), rel = releaseDate(), n = rows.length;
   const by = s => rows.filter(r => r.status === s).length, done = by('Done'), over = rows.filter(r => r.status !== 'Done' && r.due < today).length;
-  const days = Math.round(dayNum(rel) - dayNum(today));
+  const days = Math.round(dayNum(rel) - dayNum(today)), att = over + by('Delayed');
   const next = rows.filter(r => r.status !== 'Done' && r.due >= today).sort((a, b) => a.due < b.due ? -1 : a.due > b.due ? 1 : 0)[0];
-  const card = (cls, label, big, line) => '<div class="stat ' + cls + '"><div class="sl">' + label + '</div><div class="sv">' + big + '</div><div class="sd">' + line + '</div></div>';
+  const card = (cls, label, big, line, frac) => '<div class="stat ' + cls + '"><div class="sl">' + label + '</div><div class="sv">' + big + '</div><div class="sd">' + line + '</div>' +
+    (frac == null ? '' : '<div class="sb"><i style="width:' + Math.round(clamp(frac, 0, 1) * 100) + '%"></i></div>') + '</div>';
   el('tlSum').innerHTML =
     card('rel', 'Release', esc(dLabel(rel)), days > 0 ? days + ' days to go' : days === 0 ? 'today' : Math.abs(days) + ' days ago') +
-    card('done', 'Done', done + ' of ' + n, pct(done, n) + ' of tasks') +
-    card('prog', 'In progress', by('In progress'), next ? 'Next due: ' + esc(next.task) + ', ' + esc(dShort(next.due)) : 'Nothing due') +
-    card('delay' + (by('Delayed') ? ' amber' : ''), 'Delayed', by('Delayed'), by('On hold') + ' on hold') +
-    card('over' + (over ? ' bad' : ''), 'Overdue', over, 'past their due date and not done');
+    card('done', 'Progress', done + ' of ' + n + ' done', by('In progress') + ' in progress' + (next ? ' · next due ' + esc(dShort(next.due)) + ': ' + esc(next.task) : ''), n ? done / n : 0) +
+    card('att' + (att ? ' bad' : ''), 'Needs attention', att, over + ' overdue · ' + by('Delayed') + ' delayed' + (by('On hold') ? ' · ' + by('On hold') + ' on hold' : ''));
 }
 async function actTimeline(op){
   if (!tlCanEdit() || !TL.rows) return false;
@@ -1598,44 +1921,82 @@ async function actTimeline(op){
 el('tlWrap').addEventListener('change', ev => {
   const x = ev.target.closest('[data-f]'); if (!x) return;
   const tr = x.closest('tr[data-id]'), r = tr && TL.rows.find(y => y.id === tr.dataset.id); if (!r) return;
-  const f = x.dataset.f; let v = x.type === 'checkbox' ? x.checked : String(x.value).trim();
-  if ((f === 'start' || f === 'due') && !isoOk(v)) { x.value = r[f]; return; }
-  if (f === 'task' && !v) { x.value = r.task; return; }
+  const f = x.dataset.f, v = String(x.value).trim();
+  if (f === 'due' && !isoOk(v)) { x.value = r.due; return; }
   if (v === r[f]) return;
-  if (x.tagName === 'SELECT' || x.type === 'checkbox' || x.type === 'date') x.blur();
+  x.blur();
   actTimeline({type: 'update', id: r.id, fields: {[f]: v}});
-});
-el('tlWrap').addEventListener('keydown', ev => {
-  if (ev.key === 'Enter' && ev.target.matches('input[type=text]')) { ev.preventDefault(); ev.target.blur(); }
 });
 el('tlWrap').addEventListener('focusout', ev => {
   if (tlPending && !el('tlWrap').contains(ev.relatedTarget)) setTimeout(() => { if (!el('tlWrap').contains(document.activeElement)) renderTimeline(); }, 0);
 });
-el('tlWrap').addEventListener('click', async ev => {
+el('tlWrap').addEventListener('click', ev => {
+  const ph = ev.target.closest('[data-phase]');
+  if (ph) { const k = ph.dataset.phase; if (TLC.has(k)) TLC.delete(k); else TLC.add(k); saveTlc(); renderTimeline(); return; }
   const pk = ev.target.closest('[data-pick]');
   if (pk) {
     const inp = pk.parentElement.querySelector('.dpick');
     try { inp.showPicker(); } catch (e) { inp.classList.add('show'); inp.focus(); }
     return;
   }
-  const b = ev.target.closest('[data-tl]'); if (!b) return;
-  const id = b.closest('tr[data-id]').dataset.id, r = TL.rows.find(y => y.id === id), what = b.dataset.tl; if (!r) return;
-  if (what === 'up' || what === 'down') { b.blur(); actTimeline({type: 'move', id, dir: what === 'up' ? -1 : 1}); }
-  else if (what === 'add') { b.blur(); addTask(r); }
-  else if (what === 'del') {
-    if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Delete?'; b.classList.add('danger');
-      setTimeout(() => { if (document.contains(b)) { delete b.dataset.sure; b.innerHTML = '&#10005;'; b.classList.remove('danger'); } }, 4000); return; }
-    b.blur(); actTimeline({type: 'remove', id});
-  }
+  const o = ev.target.closest('[data-open]');
+  if (o) openTlEd(o.closest('tr[data-id]').dataset.id);
+});
+el('tlFold').addEventListener('click', () => {
+  const groups = tlGroups(TL.rows || []), all = groups.length && groups.every(g => TLC.has(g.phase));
+  if (all) TLC.clear(); else groups.forEach(g => TLC.add(g.phase));
+  saveTlc(); renderTimeline();
 });
 async function addTask(after){
   const ref = after || (TL.rows || [])[TL.rows.length - 1], d = ref ? ref.due : todayISO();
   const row = {id: newId(), phase: ref ? ref.phase : '', task: 'New task', team: ref ? ref.team : '', start: d, due: d, status: 'Not started', done: false, notes: '', milestone: false};
-  if (await actTimeline({type: 'insert', afterId: ref ? ref.id : null, row})) {
-    const t = document.querySelector('#tlWrap tr[data-id="' + CSS.escape(row.id) + '"] input[data-f="task"]'); if (t) { t.focus(); t.select(); }
-  }
+  if (row.phase) TLC.delete(row.phase);
+  if (await actTimeline({type: 'insert', afterId: ref ? ref.id : null, row})) openTlEd(row.id, true);
 }
 el('tlAdd').addEventListener('click', () => addTask(null));
+
+/* one task's window: everything about it, plus moving, adding after and deleting */
+const tled = el('tlEd'); let tlId = null;
+function openTlEd(id, focusName){
+  const r = (TL.rows || []).find(x => x.id === id); if (!r) return;
+  tlId = id; fillTlEd(true);
+  el('tlConfirm').hidden = true;
+  if (!tled.open) tled.showModal();
+  const t = el('tfTask'); t.focus(); if (focusName) t.select();
+}
+function fillTlEd(all){
+  const r = (TL.rows || []).find(x => x.id === tlId);
+  if (!r) { if (tled.open) tled.close(); return; }
+  el('tlEdTitle').textContent = r.task || 'Task';
+  el('tlEdMeta').textContent = (r.phase || 'No phase') + ' · due ' + dLabel(r.due);
+  const i = TL.rows.indexOf(r); el('tlUp').disabled = i <= 0; el('tlDown').disabled = i >= TL.rows.length - 1;
+  if (!all) return;
+  el('tfTask').value = r.task; el('tfTeam').value = r.team; el('tfStart').value = r.start; el('tfDue').value = r.due;
+  el('tfStatus').innerHTML = TL_STATUS.map(x => '<option' + (x === r.status ? ' selected' : '') + '>' + x + '</option>').join('');
+  el('tfMs').checked = !!r.milestone; el('tfNotes').value = r.notes || '';
+  el('tlTeams').innerHTML = [...new Set(TL.rows.map(x => x.team).filter(Boolean))].map(t => '<option value="' + esc(t) + '">').join('');
+}
+el('tlForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const r = (TL.rows || []).find(x => x.id === tlId); if (!r) { tled.close(); return; }
+  const task = el('tfTask').value.trim(); if (!task) { el('tfTask').focus(); return; }
+  let start = el('tfStart').value, due = el('tfDue').value;
+  if (!isoOk(due)) due = r.due; if (!isoOk(start)) start = r.start;
+  const want = {task, team: el('tfTeam').value.trim(), start, due, status: el('tfStatus').value, milestone: el('tfMs').checked, notes: el('tfNotes').value.trim()};
+  const fields = {}; Object.keys(want).forEach(k => { if (want[k] !== (k === 'milestone' ? !!r.milestone : r[k])) fields[k] = want[k]; });
+  tled.close();
+  if (Object.keys(fields).length) actTimeline({type: 'update', id: r.id, fields});
+});
+el('tlEdClose').addEventListener('click', () => tled.close());
+el('tlCancel').addEventListener('click', () => tled.close());
+tled.addEventListener('click', ev => { if (ev.target === tled) tled.close(); });
+el('tlUp').addEventListener('click', async () => { await actTimeline({type: 'move', id: tlId, dir: -1}); fillTlEd(false); });
+el('tlDown').addEventListener('click', async () => { await actTimeline({type: 'move', id: tlId, dir: 1}); fillTlEd(false); });
+el('tlAddAfter').addEventListener('click', () => { const r = (TL.rows || []).find(x => x.id === tlId); tled.close(); if (r) addTask(r); });
+el('tlDel').addEventListener('click', () => { const r = (TL.rows || []).find(x => x.id === tlId); if (!r) return;
+  el('tlConfirmText').textContent = 'Delete "' + r.task + '"?'; el('tlConfirm').hidden = false; });
+el('tlNo').addEventListener('click', () => { el('tlConfirm').hidden = true; });
+el('tlYes').addEventListener('click', () => { const id = tlId; tled.close(); actTimeline({type: 'remove', id}); });
 
 /* ---------------- reports ---------------- */
 function download(blob, name){
@@ -1650,6 +2011,19 @@ async function busy(btn, label, fn){
 const withTimeline = () => tlCanEdit() && Array.isArray(TL.rows) && TL.rows.length > 0;
 const isoDate = s => new Date(Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)));
 
+const itemPages = it => it.part ? it.from + ' (' + fmtPP(it.pp) + ')' : pages(it.from, it.to);
+/* one page for the page-by-page reports; a shared page lists each placement on it */
+function pageRow(L, p){
+  const on = L.P2L[p] || [], it = on[0];
+  if (!it) return {section: '', content: '(free)', status: '', cd: '', ld: '', lock: '', sample: null, open: false};
+  if (!it.part) { const k = p - it.from;
+    return {section: secName(it.section), content: shortLabel(it), status: it.open ? 'OPEN' : it.sponsor || '', cd: k < it.contentPages ? 'Yes' : '',
+      ld: k < it.layoutPages ? 'Yes' : '', lock: it.locked ? 'Locked' : '', sample: samplePage(p), open: it.open}; }
+  const free = 1 - on.reduce((a, x) => a + x.pp, 0), all = (f) => on.every(f) ? 'Yes' : on.some(f) ? 'Part' : '';
+  return {section: secName(it.section), content: on.map(x => fmtPP(x.pp) + ' ' + shortLabel(x)).join(' / ') + (free > 1e-9 ? ' / ' + fmtPP(free) + ' free' : ''),
+    status: on.map(x => x.open ? 'OPEN' : x.sponsor || 'house').join(' / '), cd: all(x => x.contentPages > 0), ld: all(x => x.layoutPages > 0),
+    lock: on.some(x => x.locked) ? 'Locked' : '', sample: null, open: on.some(x => x.open)};
+}
 function exportExcel(){
   return busy(el('btnXlsx'), 'Exporting…', async () => {
     await loadScript('lib/exceljs.min.js');
@@ -1680,10 +2054,10 @@ function exportExcel(){
     const share = (a, b, n, d) => ({formula: 'IF(' + d + '=0,"",' + n + '/' + d + ')', result: b ? a / b : ''});
     // Sections
     const cS = [{key: 's', h: 'Section', w: 30}, {key: 'p', h: 'Pages', w: 11, num: true}, {key: 'n', h: 'No. of pages', w: 10, num: true, fmt: '0'},
-      {key: 'sa', h: 'Saleable pages', w: 10, num: true, fmt: '0'}, {key: 'o', h: 'Open pages', w: 9, num: true, fmt: '0'},
-      {key: 'op', h: 'Open, % of saleable', w: 11, num: true, fmt: '0%'}, {key: 'c', h: 'Content done (pages)', w: 12, num: true, fmt: '0'},
-      {key: 'cp', h: 'Content, % of pages', w: 11, num: true, fmt: '0%'}, {key: 'l', h: 'Layout done (pages)', w: 11, num: true, fmt: '0'},
-      {key: 'lp', h: 'Layout, % of pages', w: 11, num: true, fmt: '0%'}, {key: 'k', h: 'Locked pages', w: 9, num: true, fmt: '0'}];
+      {key: 'sa', h: 'Saleable pages', w: 10, num: true}, {key: 'o', h: 'Open pages', w: 9, num: true},
+      {key: 'op', h: 'Open, % of saleable', w: 11, num: true, fmt: '0%'}, {key: 'c', h: 'Content done (pages)', w: 12, num: true},
+      {key: 'cp', h: 'Content, % of pages', w: 11, num: true, fmt: '0%'}, {key: 'l', h: 'Layout done (pages)', w: 11, num: true},
+      {key: 'lp', h: 'Layout, % of pages', w: 11, num: true, fmt: '0%'}, {key: 'k', h: 'Locked pages', w: 9, num: true}];
     const w1 = sheet('Sections', 'Flat plan · sections', cS);
     L.secs.forEach((s, i) => { const r = 4 + i;
       add(w1, cS, [secName(s.section), pages(s.from, s.to), s.pp, s.saleable, s.open, share(s.open, s.saleable, 'E' + r, 'D' + r),
@@ -1701,10 +2075,10 @@ function exportExcel(){
     // Flat plan, item by item
     const cI = [{key: 'sn', h: 'SN', w: 6, num: true}, {key: 'sec', h: 'Section', w: 24}, {key: 'it', h: 'Item', w: 40, wrap: true},
       {key: 'ty', h: 'Type', w: 16}, {key: 'pp', h: 'PP', w: 6, num: true}, {key: 'pg', h: 'Pages', w: 10, num: true},
-      {key: 'st', h: 'Status', w: 26}, {key: 'cd', h: 'Content done (pages)', w: 11, num: true, fmt: '0'}, {key: 'ld', h: 'Layout done (pages)', w: 11, num: true, fmt: '0'},
+      {key: 'st', h: 'Status', w: 26}, {key: 'cd', h: 'Content done (pages)', w: 11, num: true}, {key: 'ld', h: 'Layout done (pages)', w: 11, num: true},
       {key: 'lk', h: 'Locked', w: 8}, {key: 'sm', h: 'Sample pages (v14)', w: 12, num: true}, {key: 'no', h: 'Note', w: 32, wrap: true}];
     const w2 = sheet('Flat Plan', 'Flat plan · item by item', cI);
-    L.items.forEach((it, k) => add(w2, cI, [k + 1, secName(it.section), it.item, TYPE_LABEL[it.type] || it.type, it.pp, pages(it.from, it.to),
+    L.items.forEach((it, k) => add(w2, cI, [k + 1, secName(it.section), it.item, TYPE_LABEL[it.type] || it.type, it.pp, itemPages(it),
       it.open ? 'OPEN' : it.sponsor ? 'Sold: ' + it.sponsor : '', it.contentPages, it.layoutPages, it.locked ? 'Locked' : '',
       it.sample ? pages(it.sample[0], it.sample[1]) : '', it.note || ''], it.open ? {fill: OPENF, openKey: 'st'} : it.locked ? {fill: LOCKF} : {}));
     w2.autoFilter = {from: {row: 3, column: 1}, to: {row: 3 + L.items.length, column: cI.length}};
@@ -1714,9 +2088,8 @@ function exportExcel(){
       {key: 'lk', h: 'Locked', w: 8}, {key: 'sm', h: 'Sample page (v14)', w: 12, num: true}];
     const w3 = sheet('Page by page', 'Flat plan · page by page', cP);
     for (let p = 1; p <= L.total; p++) {
-      const it = L.P2I[p], sm = samplePage(p), k = p - it.from;
-      add(w3, cP, [p, p % 2 ? 'R' : 'L', secName(it.section), shortLabel(it), it.open ? 'OPEN' : it.sponsor || '', k < it.contentPages ? 'Yes' : '',
-        k < it.layoutPages ? 'Yes' : '', it.locked ? 'Locked' : '', sm || ''], it.open ? {fill: OPENF, openKey: 'st'} : {});
+      const r = pageRow(L, p);
+      add(w3, cP, [p, p % 2 ? 'R' : 'L', r.section, r.content, r.status, r.cd, r.ld, r.lock, r.sample || ''], r.open ? {fill: OPENF, openKey: 'st'} : {});
     }
     w3.autoFilter = {from: {row: 3, column: 1}, to: {row: 3 + L.total, column: cP.length}};
     // Timeline
@@ -1756,7 +2129,7 @@ function exportPdf(){
       LAYOUT = [18, 54, 94], RED = [176, 58, 91], AMBER = [154, 107, 0];
     const heading = (s, x, y) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...MUTE); doc.text(s, x, y, {charSpace: 0.5});
       doc.setDrawColor(...RULE); doc.setLineWidth(0.3); doc.line(x, y + 1.6, W - M, y + 1.6); };
-    const pc = (a, b) => b > 0 ? a + ' (' + Math.round(a * 100 / b) + '%)' : '–';
+    const pc = (a, b) => b > 0 ? fmtPP(a) + ' (' + Math.round(a * 100 / b) + '%)' : '–';
     // page 1: title, sections, key and figures
     doc.setFillColor(...NAVY); doc.roundedRect(M, M, W - 2 * M, 26, 2, 2, 'F');
     doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(227, 185, 74); doc.text('MECSR DIRECTORY', M + 8, M + 8, {charSpace: 0.6});
@@ -1792,11 +2165,11 @@ function exportPdf(){
     lock(KX + 85, ky - 1.5); doc.text('locked', KX + 88, ky);
     const T = L.total, sig = Math.ceil(T / 16);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.6); doc.setTextColor(...INK);
-    doc.text([pdfText('Sold: ' + t.sold + ' of ' + t.saleable + ' saleable pages (' + pct(t.sold, t.saleable) + ')'),
-      pdfText('Still for sale (OPEN): ' + t.open + ' pages (' + pct(t.open, t.saleable) + ')'),
-      pdfText('Content done: ' + t.content + ' of ' + T + ' pages (' + pct(t.content, T) + '), ' + (T - t.content) + ' to go'),
-      pdfText('Layout done: ' + t.layout + ' of ' + T + ' pages (' + pct(t.layout, T) + '), ' + (T - t.layout) + ' to go'),
-      pdfText('Locked: ' + t.locked + ' pages in ' + t.lockedItems + ' items'),
+    doc.text([pdfText('Sold: ' + fmtPP(t.sold) + ' of ' + fmtPP(t.saleable) + ' saleable pages (' + pct(t.sold, t.saleable) + ')'),
+      pdfText('Still for sale (OPEN): ' + fmtPP(t.open) + ' pages (' + pct(t.open, t.saleable) + ')'),
+      pdfText('Content done: ' + fmtPP(t.content) + ' of ' + T + ' pages (' + pct(t.content, T) + '), ' + fmtPP(T - t.content) + ' to go'),
+      pdfText('Layout done: ' + fmtPP(t.layout) + ' of ' + T + ' pages (' + pct(t.layout, T) + '), ' + fmtPP(T - t.layout) + ' to go'),
+      pdfText('Locked: ' + fmtPP(t.locked) + ' pages in ' + t.lockedItems + ' items'),
       pdfText(sig + ' sections of 16 = ' + sig * 16 + ' pages'),
       'Live board: orient-alt.github.io/mecsr-directory-2027'], KX, ky + 8, {lineHeightFactor: 1.55});
     doc.setFont('helvetica', 'bold'); doc.setTextColor(...(T % 2 ? RED : OPEN));
@@ -1818,7 +2191,25 @@ function exportPdf(){
       const words = text.split(' ').map(w => doc.getTextWidth(w) > maxW && BREAKS[w] ? BREAKS[w].split('|').map((x, i, a) => i < a.length - 1 ? x + '-' : x).join(' ') : w);
       return doc.splitTextToSize(words.join(' '), maxW);
     }
+    function splitChip(p, on, x, y){                   // a page shared by half and quarter placements
+      doc.setFillColor(255, 255, 255); doc.rect(x, y, CW, CH, 'F');
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(5.6); doc.setTextColor(...MUTE); doc.text(String(p), x + 1.6, y + 2.6);
+      if (on.some(it => it.locked)) lock(x + CW - 2.7, y + 1.4);
+      const y0 = y + 3.6, H = CH - 3.6, box = b => [x + CW * b.l / 100, y0 + H * b.t / 100, CW * b.w / 100, H * b.h / 100];
+      freeBoxes(on).forEach(b => { const [bx, by, bw, bh] = box(b); doc.setFillColor(238, 240, 243); doc.rect(bx + 0.15, by + 0.15, bw - 0.3, bh - 0.3, 'F');
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(3.8); doc.setTextColor(...MUTE); doc.text('free', bx + 1, by + bh / 2 + 0.6); });
+      on.forEach(it => {
+        const [bx, by, bw, bh] = box(cellBox(it));
+        doc.setFillColor(...(it.open ? OPENBG : [255, 255, 255])); doc.rect(bx + 0.15, by + 0.15, bw - 0.3, bh - 0.3, 'F');
+        doc.setFillColor(...(it.open ? OPEN : rgb(TYPE_COLOR[it.type] || '#8A9099'))); doc.rect(bx, by, 0.6, bh, 'F');
+        doc.setDrawColor(...RULE); doc.setLineWidth(0.15); doc.rect(bx, by, bw, bh, 'S');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(4.2); doc.setTextColor(...INK);
+        doc.text(it.pp < 0.5 ? fmtPP(it.pp) : wrap(pdfText(shortLabel(it)), bw - 1.6).slice(0, 2), bx + 1.1, by + 2.2, {lineHeightFactor: 1.1});
+        if (it.open) { doc.setFontSize(3.8); doc.setTextColor(...OPEN); doc.text('OPEN', bx + 1.1, by + bh - 0.8); }
+      });
+    }
     function chip(p, x, y){
+      if (L.P2L[p] && L.P2L[p][0].part) return splitChip(p, L.P2L[p], x, y);
       const it = L.P2I[p], k = p - it.from, c = k < it.contentPages, l = k < it.layoutPages;
       doc.setFillColor(...(it.open ? OPENBG : [255, 255, 255])); doc.rect(x, y, CW, CH, 'F');
       doc.setFillColor(...(it.open ? OPEN : rgb(TYPE_COLOR[it.type] || '#8A9099'))); doc.rect(x, y, 0.8, CH, 'F');
@@ -1854,9 +2245,9 @@ function exportPdf(){
     });
     // page by page
     const all = [];
-    for (let p = 1; p <= L.total; p++) { const it = L.P2I[p], sm = samplePage(p), k = p - it.from;
-      all.push([String(p), p % 2 ? 'R' : 'L', pdfText(secName(it.section)), pdfText(shortLabel(it)), it.open ? 'OPEN' : pdfText(it.sponsor || '–'),
-        k < it.contentPages ? 'done' : '–', k < it.layoutPages ? 'done' : '–', it.locked ? 'locked' : '', sm ? String(sm) : '–']); }
+    for (let p = 1; p <= L.total; p++) { const r = pageRow(L, p);
+      all.push([String(p), p % 2 ? 'R' : 'L', pdfText(r.section), pdfText(r.content), r.status === 'OPEN' ? 'OPEN' : pdfText(r.status || '–'),
+        r.cd === 'Yes' ? 'done' : r.cd === 'Part' ? 'part' : '–', r.ld === 'Yes' ? 'done' : r.ld === 'Part' ? 'part' : '–', r.lock ? 'locked' : '', r.sample ? String(r.sample) : '–']); }
     const PER = 34;
     for (let i = 0; i < all.length; i += PER * 2) {
       doc.addPage(); let startY = M + 2;
@@ -1900,21 +2291,312 @@ function exportPdf(){
   });
 }
 
+/* ---------------- My plan: orient@mecsc.org's own tasks, notes, dates, links and files ----------------
+   Private to that account: the tab is shown to it alone, and the rules let no other account read or write it. */
+const MP = {entries: null, view: 'list', kind: 'all', q: '', month: '', err: '', openDone: false};
+const MP_KINDS = {task: 'Task', note: 'Note', event: 'Date'};
+const MP_STATUS = [['todo', 'To do'], ['doing', 'Doing'], ['waiting', 'Waiting'], ['done', 'Done']];
+const MP_MAX = 25 * 1024 * 1024;
+const isOwnerNow = () => !!(store && store.kind === 'live' && store.isOwner && store.isOwner());
+try { const v = localStorage.getItem('mecsr-myplan-view'); if (v === 'cal' || v === 'list') MP.view = v; } catch (e) {}
+function cleanEntry(x){
+  return {id: String(x.id), kind: MP_KINDS[x.kind] ? x.kind : 'task', title: String(x.title || ''),
+    date: isoOk(x.date) ? x.date : '', time: /^\d\d:\d\d$/.test(x.time || '') ? x.time : '', due: isoOk(x.due) ? x.due : '',
+    status: MP_STATUS.some(t => t[0] === x.status) ? x.status : 'todo', notes: String(x.notes || ''), pinned: !!x.pinned,
+    tags: Array.isArray(x.tags) ? x.tags.map(t => String(t).trim()).filter(Boolean) : [],
+    links: Array.isArray(x.links) ? x.links.filter(l => l && l.url).map(l => ({url: String(l.url), label: String(l.label || '')})) : [],
+    files: Array.isArray(x.files) ? x.files.filter(f => f && f.id).map(f => ({id: String(f.id), name: String(f.name || 'file'), size: +f.size || 0, type: String(f.type || '')})) : [],
+    createdAt: tsMs(x.createdAt), updatedAt: tsMs(x.updatedAt)};
+}
+function onWorkspace(list){ MP.entries = list.map(cleanEntry); MP.err = ''; renderMyPlan(); }
+function wsReset(){ MP.entries = null; MP.err = ''; if (mped.open) mped.close(); renderMyPlan(); }
+const mpDone = e => e.kind === 'task' && e.status === 'done';
+const mpKey = e => e.kind === 'task' ? (e.due || e.date) : e.date;          // the date an entry is filed under
+const addDays = (iso, n) => new Date((dayNum(iso) + n) * 864e5).toISOString().slice(0, 10);
+const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
+function mpMatch(e){
+  if (MP.kind !== 'all' && e.kind !== MP.kind) return false;
+  const q = MP.q.trim().toLowerCase(); if (!q) return true;
+  return [e.title, e.notes, e.tags.join(' '), e.links.map(l => l.label + ' ' + l.url).join(' '), e.files.map(f => f.name).join(' ')]
+    .join(' ').toLowerCase().indexOf(q) >= 0;
+}
+function mpChips(e){
+  const today = todayISO(), out = [], k = e.due;
+  if (e.kind !== 'task') out.push('<span class="mpk">' + MP_KINDS[e.kind] + '</span>');
+  if (e.date) out.push('<span class="mpd">' + esc(dShort(e.date) + (e.time ? ' ' + e.time : '')) + '</span>');
+  if (k) out.push('<span class="mpd dl' + (!mpDone(e) && k < today ? ' over' : '') + '">due ' + esc(dShort(k)) + '</span>');
+  if (e.kind === 'task' && (e.status === 'doing' || e.status === 'waiting')) out.push('<span class="mps s-' + e.status + '">' + (e.status === 'doing' ? 'Doing' : 'Waiting') + '</span>');
+  e.tags.forEach(t => out.push('<span class="mptag">#' + esc(t) + '</span>'));
+  if (e.links.length) out.push('<span class="m">' + e.links.length + (e.links.length > 1 ? ' links' : ' link') + '</span>');
+  if (e.files.length) out.push('<span class="m">' + e.files.length + (e.files.length > 1 ? ' files' : ' file') + '</span>');
+  return out.join('');
+}
+function mpCard(e){
+  const today = todayISO(), key = mpKey(e), over = e.kind === 'task' && !mpDone(e) && key && key < today;
+  const first = e.notes.split('\n').map(x => x.trim()).find(Boolean) || '';
+  return '<div class="mpc k-' + e.kind + (mpDone(e) ? ' done' : '') + (over ? ' over' : '') + (e.pinned ? ' pin' : '') + '" data-mp="' + esc(e.id) + '">' +
+    (e.kind === 'task' ? '<input type="checkbox" class="mpck" data-mpdone aria-label="Done: ' + esc(e.title) + '"' + (mpDone(e) ? ' checked' : '') + '>'
+      : '<span class="mpico" aria-hidden="true">' + (e.kind === 'note' ? '&#9998;' : '&#9670;') + '</span>') +
+    '<button type="button" class="mpopen" data-mpopen><span class="mpt">' + esc(e.title || '(no title)') + '</span>' +
+    '<span class="mpmeta">' + mpChips(e) + '</span>' + (first ? '<span class="mpn">' + esc(first.slice(0, 180)) + '</span>' : '') + '</button></div>';
+}
+function mpList(list){
+  const today = todayISO(), wk = addDays(today, 7);
+  const G = [['pin', 'Pinned'], ['over', 'Overdue'], ['today', 'Today'], ['week', 'Next 7 days'], ['later', 'Later'], ['nodate', 'No date'],
+    ['notes', 'Notes'], ['done', 'Done and past']], B = Object.fromEntries(G.map(g => [g[0], []]));
+  list.forEach(e => {
+    const k = mpKey(e);
+    if (mpDone(e) || (e.kind !== 'task' && k && k < today)) B.done.push(e);
+    else if (e.pinned) B.pin.push(e);
+    else if (!k) B[e.kind === 'note' ? 'notes' : 'nodate'].push(e);
+    else if (k < today) B.over.push(e);
+    else if (k === today) B.today.push(e);
+    else if (k <= wk) B.week.push(e);
+    else B.later.push(e);
+  });
+  const byKey = (a, b) => (mpKey(a) + (a.time || '')).localeCompare(mpKey(b) + (b.time || '')) || a.createdAt - b.createdAt;
+  ['over', 'today', 'week', 'later'].forEach(g => B[g].sort(byKey));
+  ['pin', 'nodate', 'notes'].forEach(g => B[g].sort((a, b) => b.updatedAt - a.updatedAt));
+  B.done.sort((a, b) => (mpKey(b) || '').localeCompare(mpKey(a) || '') || b.updatedAt - a.updatedAt);
+  const html = G.filter(g => B[g[0]].length).map(g => {
+    const body = B[g[0]].map(mpCard).join('');
+    if (g[0] === 'done') return '<details class="mpg done"' + (MP.openDone ? ' open' : '') + '><summary>' + g[1] + ' <span class="m">' + B.done.length + '</span></summary>' + body + '</details>';
+    return '<section class="mpg g-' + g[0] + '"><h3>' + g[1] + ' <span class="m">' + B[g[0]].length + '</span></h3>' + body + '</section>';
+  }).join('');
+  return html || '<p class="m mpempty">' + (MP.entries.length ? 'Nothing matches.' : 'Nothing here yet. Add a task, a note or a date above.') + '</p>';
+}
+function mpCalendar(list){
+  const today = todayISO(), m = MP.month || today.slice(0, 7), y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1;
+  const first = Date.UTC(y, mo, 1) / 864e5, start = first - (new Date(first * 864e5).getUTCDay() + 6) % 7;
+  const on = {}; const put = (iso, e, dl) => { (on[iso] = on[iso] || []).push({e, dl}); };
+  list.forEach(e => { if (e.date) put(e.date, e, false); if (e.due && e.due !== e.date) put(e.due, e, true); });
+  let cells = '';
+  for (let i = 0; i < 42; i++) {
+    const iso = new Date((start + i) * 864e5).toISOString().slice(0, 10), inM = +iso.slice(5, 7) - 1 === mo;
+    if (i === 35 && !inM) break;
+    const pills = (on[iso] || []).sort((a, b) => (a.e.time || '99').localeCompare(b.e.time || '99')).map(x => '<button type="button" class="mpp k-' + x.e.kind +
+      (x.dl ? ' dl' : '') + (mpDone(x.e) ? ' done' : '') + (x.dl && !mpDone(x.e) && iso < today ? ' over' : '') + '" data-mpid="' + esc(x.e.id) + '" title="' +
+      esc((x.dl ? 'Deadline: ' : '') + x.e.title) + '">' + (x.dl ? 'due ' : x.e.time ? esc(x.e.time) + ' ' : '') + esc(x.e.title || '(no title)') + '</button>').join('');
+    cells += '<div class="mpday' + (iso === today ? ' today' : '') + (inM ? '' : ' out') + '" data-mpday="' + iso + '"><span class="dn">' + (+iso.slice(8)) + '</span>' + pills + '</div>';
+  }
+  const undated = list.filter(e => !e.date && !e.due && !mpDone(e)).length;
+  return '<div class="mpcalhead"><button class="nb" type="button" data-mpm="-1" aria-label="Previous month">&lsaquo;</button><b>' +
+    new Date(Date.UTC(y, mo, 15)).toLocaleDateString('en-GB', {month: 'long', year: 'numeric', timeZone: 'UTC'}) +
+    '</b><button class="nb" type="button" data-mpm="1" aria-label="Next month">&rsaquo;</button><button class="nb" type="button" data-mpm="0">Today</button>' +
+    (undated ? '<span class="m">' + undated + ' open ' + (undated > 1 ? 'entries have' : 'entry has') + ' no date (see List)</span>' : '') + '</div>' +
+    '<div class="mpcal"><div class="mpwd">Mon</div><div class="mpwd">Tue</div><div class="mpwd">Wed</div><div class="mpwd">Thu</div><div class="mpwd">Fri</div><div class="mpwd">Sat</div><div class="mpwd">Sun</div>' + cells + '</div>' +
+    '<p class="m">Click a day to add something on it. Deadlines show as “due”.</p>';
+}
+function renderMyPlan(){
+  if (!el('p2') || el('p2').hidden) return;
+  const ok = isOwnerNow();
+  el('mpGate').hidden = ok && !MP.err; el('mpBody').hidden = !ok || !!MP.err;
+  if (!ok) { el('mpGate').textContent = 'This tab is private.'; return; }
+  if (MP.err) { el('mpGate').textContent = 'My plan could not be read: ' + MP.err; return; }
+  document.querySelectorAll('#p2 input[name=mpv]').forEach(r => { r.checked = r.value === MP.view; });
+  el('mpFil').querySelectorAll('[data-mpk]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mpk === MP.kind)));
+  const box = el('mpOut');
+  if (!MP.entries) { box.innerHTML = '<p class="m mpempty">Loading…</p>'; return; }
+  const list = MP.entries.filter(mpMatch);
+  const keep = box.querySelector('details.mpg.done'); if (keep) MP.openDone = keep.open;
+  box.innerHTML = MP.view === 'cal' ? mpCalendar(list) : mpList(list);
+  const n = MP.entries.filter(e => !mpDone(e) && e.kind === 'task').length;
+  el('mpStatus').innerHTML = '<span class="pill live">Private</span>only orient@mecsc.org can see this · ' + n + (n === 1 ? ' open task' : ' open tasks');
+}
+function quickKind(){ return (document.querySelector('#mpAdd input[name=mpk]:checked') || {}).value || 'task'; }
+function syncQuickDate(){
+  const k = quickKind(), d = el('mpDate'); d.title = k === 'task' ? 'Deadline (optional)' : 'Date (optional)'; d.setAttribute('aria-label', d.title);
+}
+document.querySelectorAll('#mpAdd input[name=mpk]').forEach(r => r.addEventListener('change', syncQuickDate));
+function newEntry(kind, title, date){
+  return cleanEntry({id: '', kind, title: title || '', date: kind === 'task' ? '' : date, due: kind === 'task' ? date : '', status: 'todo'});
+}
+el('mpAdd').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const title = el('mpTitle').value.trim(), kind = quickKind(), date = isoOk(el('mpDate').value) ? el('mpDate').value : '';
+  if (!title) { el('mpTitle').focus(); return; }
+  const e = newEntry(kind, title, date), id = store.newEntryId();
+  try {
+    await store.saveEntry(id, entryData(e), true);
+    el('mpTitle').value = ''; el('mpDate').value = ''; el('mpTitle').focus();
+  } catch (err) { console.warn(err); toast('Not added: ' + friendly(err), true); }
+});
+el('mpMore').addEventListener('click', () => {
+  const date = isoOk(el('mpDate').value) ? el('mpDate').value : '';
+  openMpEd(null, newEntry(quickKind(), el('mpTitle').value.trim(), date));
+  el('mpTitle').value = ''; el('mpDate').value = '';
+});
+el('mpSearch').addEventListener('input', () => { MP.q = el('mpSearch').value; renderMyPlan(); });
+el('mpFil').addEventListener('click', ev => { const b = ev.target.closest('[data-mpk]'); if (!b) return; MP.kind = b.dataset.mpk; renderMyPlan(); });
+document.querySelectorAll('#p2 input[name=mpv]').forEach(r => r.addEventListener('change', () => {
+  if (!r.checked) return; MP.view = r.value; try { localStorage.setItem('mecsr-myplan-view', MP.view); } catch (e) {} renderMyPlan();
+}));
+el('mpOut').addEventListener('click', async ev => {
+  const mm = ev.target.closest('[data-mpm]');
+  if (mm) {
+    const d = +mm.dataset.mpm, m = MP.month || todayISO().slice(0, 7);
+    if (!d) MP.month = ''; else { const y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1 + d, t = new Date(Date.UTC(y, mo, 1)); MP.month = t.toISOString().slice(0, 7); }
+    renderMyPlan(); return;
+  }
+  const pill = ev.target.closest('[data-mpid]');
+  if (pill) { const e = MP.entries.find(x => x.id === pill.dataset.mpid); if (e) openMpEd(e.id); return; }
+  const day = ev.target.closest('[data-mpday]');
+  if (day) { openMpEd(null, newEntry(quickKind(), '', day.dataset.mpday)); return; }
+  const card = ev.target.closest('[data-mp]'); if (!card) return;
+  if (ev.target.closest('[data-mpopen]')) openMpEd(card.dataset.mp);
+});
+el('mpOut').addEventListener('change', async ev => {
+  const ck = ev.target.closest('[data-mpdone]'); if (!ck) return;
+  const id = ck.closest('[data-mp]').dataset.mp;
+  try { await store.saveEntry(id, {status: ck.checked ? 'done' : 'todo'}, false); }
+  catch (err) { console.warn(err); ck.checked = !ck.checked; toast('Not saved: ' + friendly(err), true); }
+});
+
+/* the entry window */
+const mped = el('mpEd');
+let mpCur = null;              // {id, isNew, e: working copy, added: files uploaded in this window, removed: saved files taken off}
+function entryData(e){
+  return {kind: e.kind, title: e.title.slice(0, 200), date: e.date, time: e.time, due: e.due, status: e.status, notes: e.notes.slice(0, 50000),
+    pinned: !!e.pinned, tags: e.tags.slice(0, 20), links: e.links.slice(0, 50), files: e.files.slice(0, 50)};
+}
+function openMpEd(id, fresh){
+  const e = id ? (MP.entries || []).find(x => x.id === id) : fresh; if (!e) return;
+  mpCur = {id: id || store.newEntryId(), isNew: !id, e: JSON.parse(JSON.stringify(e)), added: [], removed: [], saved: false};
+  el('mpEdTitle').textContent = id ? MP_KINDS[e.kind] : 'New ' + MP_KINDS[e.kind].toLowerCase();
+  el('mpEdMeta').textContent = id && e.updatedAt ? 'Last saved ' + fmtTime(new Date(e.updatedAt)) : 'Not saved yet';
+  document.querySelectorAll('#mpEd input[name=mpfk]').forEach(r => { r.checked = r.value === e.kind; });
+  document.querySelectorAll('#mpEd input[name=mpfs]').forEach(r => { r.checked = r.value === e.status; });
+  el('mpfTitle').value = e.title; el('mpfDate').value = e.date; el('mpfTime').value = e.time; el('mpfDue').value = e.due;
+  el('mpfTags').value = e.tags.join(', '); el('mpfPin').checked = e.pinned; el('mpfNotes').value = e.notes;
+  el('mpfUrl').value = ''; el('mpfLabel').value = ''; el('mpConfirm').hidden = true; el('mpDel').hidden = !id;
+  mpKindUi(); renderMpLinks(); renderMpFiles('');
+  if (!mped.open) mped.showModal();
+  el('mpfTitle').focus();
+}
+function mpKindUi(){
+  const k = (document.querySelector('#mpEd input[name=mpfk]:checked') || {}).value || 'task';
+  el('mpfStatusK').hidden = el('mpfStatusRow').hidden = k !== 'task';
+}
+document.querySelectorAll('#mpEd input[name=mpfk]').forEach(r => r.addEventListener('change', mpKindUi));
+function renderMpLinks(){
+  const L = mpCur.e.links;
+  el('mpfLinkList').innerHTML = L.length ? L.map((l, i) => {
+    let host = ''; try { host = new URL(safeUrl(l.url)).hostname; } catch (e) {}
+    return '<div class="mprow"><a href="' + esc(safeUrl(l.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>' +
+      (l.label && host ? '<span class="m">' + esc(host) + '</span>' : '') + '<button class="lnk danger" type="button" data-mplinkdel="' + i + '">Remove</button></div>';
+  }).join('') : '<span class="m">No links yet.</span>';
+}
+function renderMpFiles(msg){
+  const F = mpCur.e.files;
+  el('mpfFileList').innerHTML = (F.length ? F.map((f, i) => '<div class="mprow"><button class="lnk" type="button" data-mpfile="' + i + '" title="Download">' + esc(f.name) + '</button>' +
+    '<span class="m">' + fmtSize(f.size) + '</span><button class="lnk danger" type="button" data-mpfiledel="' + i + '">Remove</button></div>').join('')
+    : '<span class="m">No files yet. Up to 25 MB each.</span>') + (msg ? '<div class="m mpprog">' + esc(msg) + '</div>' : '');
+}
+function readMpEd(){
+  const e = mpCur.e;
+  e.kind = (document.querySelector('#mpEd input[name=mpfk]:checked') || {}).value || 'task';
+  e.status = e.kind === 'task' ? ((document.querySelector('#mpEd input[name=mpfs]:checked') || {}).value || 'todo') : e.status;
+  e.title = el('mpfTitle').value.trim(); e.date = isoOk(el('mpfDate').value) ? el('mpfDate').value : '';
+  e.time = e.date && /^\d\d:\d\d$/.test(el('mpfTime').value) ? el('mpfTime').value : '';
+  e.due = isoOk(el('mpfDue').value) ? el('mpfDue').value : '';
+  e.tags = [...new Set(el('mpfTags').value.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
+  e.pinned = el('mpfPin').checked; e.notes = el('mpfNotes').value.replace(/\s+$/, '');
+  return e;
+}
+el('mpfLinkAdd').addEventListener('click', () => {
+  const url = el('mpfUrl').value.trim(), label = el('mpfLabel').value.trim();
+  if (!url) { el('mpfUrl').focus(); return; }
+  try { new URL(safeUrl(url)); } catch (e) { toast('That does not look like a web address', true); el('mpfUrl').focus(); return; }
+  mpCur.e.links.push({url: safeUrl(url), label}); el('mpfUrl').value = ''; el('mpfLabel').value = ''; renderMpLinks(); el('mpfUrl').focus();
+});
+el('mpfUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); el('mpfLinkAdd').click(); } });
+el('mpfLabel').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); el('mpfLinkAdd').click(); } });
+el('mpfFileBtn').addEventListener('click', () => el('mpfFile').click());
+el('mpfFile').addEventListener('change', async () => {
+  const files = [...el('mpfFile').files]; el('mpfFile').value = ''; const cur = mpCur;
+  for (const file of files) {
+    if (file.size > MP_MAX) { toast('Not attached: ' + file.name + ' is over 25 MB. Add a link to it instead.', true); continue; }
+    el('mpfFileBtn').disabled = true;
+    try {
+      const meta = await store.putFile(file, (i, n) => { if (mpCur === cur) renderMpFiles('Uploading ' + file.name + (n > 1 ? ' (' + (i + 1) + ' of ' + n + ')' : '') + '…'); });
+      if (mpCur === cur && mped.open) { cur.e.files.push(meta); cur.added.push(meta.id); renderMpFiles(''); }
+      else store.deleteBlob(meta.id).catch(() => {});
+    } catch (err) { console.warn(err); toast('Not attached: ' + friendly(err), true); if (mpCur === cur) renderMpFiles(''); }
+    finally { el('mpfFileBtn').disabled = false; }
+  }
+});
+mped.addEventListener('click', async ev => {
+  if (ev.target === mped) { mped.close(); return; }
+  const ld = ev.target.closest('[data-mplinkdel]');
+  if (ld) { mpCur.e.links.splice(+ld.dataset.mplinkdel, 1); renderMpLinks(); return; }
+  const fd = ev.target.closest('[data-mpfiledel]');
+  if (fd) {
+    const [f] = mpCur.e.files.splice(+fd.dataset.mpfiledel, 1);
+    if (f) { if (mpCur.added.indexOf(f.id) >= 0) { mpCur.added = mpCur.added.filter(x => x !== f.id); store.deleteBlob(f.id).catch(() => {}); } else mpCur.removed.push(f.id); }
+    renderMpFiles(''); return;
+  }
+  const fo = ev.target.closest('[data-mpfile]');
+  if (fo) {
+    const f = mpCur.e.files[+fo.dataset.mpfile]; if (!f) return;
+    renderMpFiles('Downloading ' + f.name + '…');
+    try { download(await store.getFile(f), f.name); renderMpFiles(''); }
+    catch (err) { console.warn(err); renderMpFiles(''); toast('Could not download: ' + friendly(err), true); }
+  }
+});
+el('mpfCopy').addEventListener('click', async () => {
+  const t = el('mpfNotes').value;
+  try { await navigator.clipboard.writeText(t); toast('Notes copied'); }
+  catch (e) { el('mpfNotes').select(); try { document.execCommand('copy'); toast('Notes copied'); } catch (x) { toast('Select the notes and copy them', true); } }
+});
+el('mpForm').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const cur = mpCur, e = readMpEd();
+  if (!e.title) { el('mpfTitle').focus(); return; }
+  el('mpSave').disabled = true;
+  try {
+    await store.saveEntry(cur.id, entryData(e), cur.isNew);
+    cur.saved = true;
+    for (const fid of cur.removed) await store.deleteBlob(fid).catch(x => console.warn('file', x));
+    mped.close();
+  } catch (err) { console.warn(err); toast('Not saved: ' + friendly(err), true); }
+  finally { el('mpSave').disabled = false; }
+});
+mped.addEventListener('close', () => {
+  const cur = mpCur; if (!cur) return;
+  if (!cur.saved) cur.added.forEach(fid => store.deleteBlob(fid).catch(() => {}));      // files added to an entry that was not saved
+  mpCur = null;
+});
+el('mpEdClose').addEventListener('click', () => mped.close());
+el('mpCancel').addEventListener('click', () => mped.close());
+el('mpDel').addEventListener('click', () => { el('mpConfirm').hidden = false; });
+el('mpNo').addEventListener('click', () => { el('mpConfirm').hidden = true; });
+el('mpYes').addEventListener('click', async () => {
+  const cur = mpCur; if (!cur) return;
+  const files = cur.e.files.concat(cur.removed.map(id => ({id})));
+  try { cur.saved = true; await store.deleteEntry(cur.id, files); mped.close(); toast('Deleted'); }
+  catch (err) { cur.saved = false; console.warn(err); toast('Not deleted: ' + friendly(err), true); }
+});
+
 /* ---------------- tabs ---------------- */
 const tabs = [...document.querySelectorAll('.tab')];
+const HASHES = ['', '#timeline', '#myplan'];
+let wantMyPlan = /^#myplan$/i.test(location.hash);
 function selectTab(i, focus){
+  if (i === 2 && !isOwnerNow()) i = 0;
   tabs.forEach((t, j) => { t.setAttribute('aria-selected', String(j === i)); t.tabIndex = j === i ? 0 : -1; el('p' + j).hidden = j !== i; });
   if (focus) tabs[i].focus();
-  try { history.replaceState(null, '', i === 1 ? '#timeline' : location.pathname + location.search); } catch (e) {}
+  try { history.replaceState(null, '', HASHES[i] || location.pathname + location.search); } catch (e) {}
   if (i === 1) renderTimeline();
+  if (i === 2) renderMyPlan();
 }
 tabs.forEach((t, i) => t.addEventListener('click', () => selectTab(i)));
 document.querySelector('nav.tabs').addEventListener('keydown', ev => {
-  const i = tabs.indexOf(document.activeElement); if (i < 0) return;
+  const shown = tabs.filter(t => !t.hidden), i = shown.indexOf(document.activeElement); if (i < 0) return;
   let n = null;
-  if (ev.key === 'ArrowRight') n = (i + 1) % tabs.length; if (ev.key === 'ArrowLeft') n = (i - 1 + tabs.length) % tabs.length;
-  if (ev.key === 'Home') n = 0; if (ev.key === 'End') n = tabs.length - 1;
-  if (n !== null) { ev.preventDefault(); selectTab(n, true); }
+  if (ev.key === 'ArrowRight') n = (i + 1) % shown.length; if (ev.key === 'ArrowLeft') n = (i - 1 + shown.length) % shown.length;
+  if (ev.key === 'Home') n = 0; if (ev.key === 'End') n = shown.length - 1;
+  if (n !== null) { ev.preventDefault(); selectTab(tabs.indexOf(shown[n]), true); }
 });
 if (/^#timeline$/i.test(location.hash)) selectTab(1);
 el('tlGate').addEventListener('click', ev => { if (ev.target.closest('#tlSignIn')) el('btnSignIn').click(); });
@@ -1924,23 +2606,36 @@ async function boot(){
   window.addEventListener('load', () => setTimeout(loadProofs, 600));
   const seed = cleanItems((window.PLAN_SEED && window.PLAN_SEED.items) || []);
   const tlSeed = cleanRows((window.TIMELINE_SEED && window.TIMELINE_SEED.rows) || []);
-  setState(seed, {updatedAt: null, version: 0, seed: true});
-  const cfg = window.FIREBASE_CONFIG;
-  if (cfg && cfg.apiKey && cfg.projectId) {
+  const cfg = window.FIREBASE_CONFIG, live = !!(cfg && cfg.apiKey && cfg.projectId);
+  if (live) { S.pub = true; S.loading = true; render(); }        // nothing is shown until the account is known
+  else setState(seed, {updatedAt: null, version: 0, seed: true}, false);
+  if (live) {
     try { store = await LiveStore.create(cfg, seed, tlSeed); }
-    catch (e) { console.warn('Firebase could not load', e); store = new ReadOnlyStore(); renderToolbar(); renderTimeline(); return; }
+    catch (e) {
+      console.warn('Firebase could not load', e); store = new ReadOnlyStore();
+      setState(publicItems(seed), {updatedAt: null, version: 0, seed: true}, true); renderTimeline(); return;
+    }
     store.collab = {notes: onNotes, chat: onChat, people: onPeople, timeline: st => setTimeline(st.rows, st.meta),
       reset: () => { collabReset(); TL.rows = null; },
-      error: (what, e) => toast('The ' + what + ' could not be read: ' + friendly(e), true)};
-    store.subscribe(st => setState(st.items, st.meta), err => { console.warn('The shared plan could not be read', err); toast('The shared plan could not be read: ' + friendly(err), true); });
+      error: (what, e) => toast('The ' + what + ' could not be read: ' + friendly(e), true),
+      workspace: onWorkspace, workspaceReset: wsReset,
+      workspaceError: e => { MP.err = friendly(e); renderMyPlan(); }};
+    store.onMode = mode => {                                  // leaving the full plan: drop it from the page at once
+      if (mode !== 'public' || (S.pub && !S.loading)) return;
+      editing = false; renaming = null; S.pub = true; S.loading = true; S.items = []; S.L = layout([]);
+      if (pv.open) pv.close(); if (ed.open) ed.close(); render();
+    };
+    store.subscribe(st => setState(st.items, st.meta, st.pub), err => { console.warn('The shared plan could not be read', err); toast('The shared plan could not be read: ' + friendly(err), true); });
     store.onUser(() => {
       if (editing && !store.canEdit()) editing = false;
       if (!store.canEdit()) { collabReset(); TL.rows = null; }
-      render(); renderTimeline(); renderChatShell(); if (pv.open) show(cur);
+      render(); renderTimeline(); renderChatShell(); if (pv.open && !S.pub) show(cur);
+      if (wantMyPlan && isOwnerNow()) { wantMyPlan = false; selectTab(2); }
+      renderMyPlan();
     });
   } else {
     store = new PracticeStore(seed, tlSeed);
-    store.subscribe(st => setState(st.items, st.meta));
+    store.subscribe(st => setState(st.items, st.meta, false));
     store.subscribeTimeline(st => setTimeline(st.rows, st.meta));
   }
   renderToolbar(); renderTimeline(); renderChatShell();

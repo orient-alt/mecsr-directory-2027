@@ -377,13 +377,10 @@ table.hist td.m{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(-
 .tlwrap{border:1px solid var(--rule);border-radius:3px;background:var(--card);box-shadow:var(--shadow);overflow-x:auto}
 .tlgate{margin:18px 0;padding:14px 16px;border:1px dashed var(--rule);border-radius:3px;background:var(--card);font-size:14px;color:var(--ink)}
 .tlload{padding:16px}
-table.tl{width:100%;min-width:1080px;border-collapse:collapse;font-size:13px;table-layout:fixed}
-table.tl col.c-dt{width:104px}
-table.tl col.c-g{width:206px}
-table.tl col.c-st{width:122px}
-table.tl col.c-ck{width:50px}
-table.tl col.c-nt{width:196px}
-table.tl col.c-ac{width:114px}
+table.tl{width:100%;min-width:720px;border-collapse:collapse;font-size:13px;table-layout:fixed}
+table.tl col.c-dt{width:84px}
+table.tl col.c-g{width:42%}
+table.tl col.c-st{width:126px}
 table.tl th{background:var(--head);color:var(--head-ink);font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
   text-align:left;padding:8px 8px;white-space:nowrap;position:sticky;top:0;z-index:2}
 table.tl td{padding:4px 6px;border-top:1px solid var(--rule-soft);vertical-align:middle;color:var(--ink)}
@@ -435,6 +432,165 @@ table.tl th.g,table.tl td.g{padding-left:10px;padding-right:10px}
 .track .s-on-hold{background:var(--amber)}
 tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
 
+/* the private tab */
+.tablock{width:9px;height:11px;margin-left:7px;vertical-align:-1px;opacity:.75}
+/* public view note, board tools */
+.pubnote{margin:10px 0 0;padding:9px 12px;border-left:3px solid var(--open);background:var(--open-bg);font-size:12.5px;color:var(--ink);
+  border-radius:0 3px 3px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.boardbar{display:flex;align-items:flex-start;gap:10px;margin:0 0 14px}
+.boardbar .legend{flex:1 1 auto;margin:0}
+.boardtools{display:flex;gap:12px;padding-top:5px;white-space:nowrap}
+/* section labels: minimise, rename */
+.bandlab .bl1{display:flex;align-items:flex-start;gap:6px}
+.bandlab .bn{padding-top:1px}
+.mini{appearance:none;flex:0 0 auto;width:18px;height:18px;border:1px solid var(--rule);background:var(--chip);color:var(--mute);border-radius:3px;
+  font:700 13px/1 Archivo,sans-serif;padding:0;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.mini:hover{color:var(--ink);border-color:var(--navy)}
+.mini:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.bandlab .bp{margin-left:24px}
+.board.editing .bandlab .bp{margin-left:24px}
+.bacts{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0 24px}
+.bacts .addbtn{margin-top:0}
+.rnform{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px 24px}
+.rni{width:100%;padding:4px 6px;border:1px solid var(--navy);border-radius:3px;background:var(--chip);color:var(--ink);font:600 12px Archivo,sans-serif;
+  text-transform:none;letter-spacing:0}
+.rnform .addbtn{margin-top:0}
+.bandrow.min{align-items:center}
+.minsum{flex:1 1 auto;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;color:var(--body);padding:4px 0}
+.minsum .badge{margin-right:-8px}
+.boardload{padding:10px 4px;margin:0}
+/* a page shared by half and quarter placements */
+.pg.split{padding:0}
+.pg.split::before{display:none}
+.pg.split .n{position:absolute;left:5px;top:3px}
+.pg.split .cells{position:absolute;left:0;right:0;top:13px;bottom:0}
+.cell{position:absolute;box-shadow:inset 0 0 0 .5px var(--rule);padding:2px 2px 0 5px;overflow:hidden;background:var(--chip)}
+.cell::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.cell .ct{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:7px;font-weight:600;line-height:1.12;color:var(--ink);hyphens:manual}
+.cell.q .ct{font-family:"IBM Plex Mono",monospace;font-weight:500;color:var(--mute)}
+.cell.open{background:var(--open-bg);box-shadow:inset 0 0 0 1px var(--open)}
+.cell.open::before{background:var(--open)}
+.cell.open .ct{-webkit-line-clamp:1}
+.cell.open::after{content:"OPEN";position:absolute;left:5px;bottom:2px;font-size:5.8px;font-weight:700;letter-spacing:.08em;color:var(--open);line-height:1}
+.cell.free{background:repeating-linear-gradient(45deg,transparent 0 3px,var(--rule-soft) 3px 6px)}
+.cell.free::before{display:none}
+.cell.free .ct{font-weight:400;font-style:italic;color:var(--mute)}
+.cell.dim{opacity:.2;filter:grayscale(1)}
+.cell .cm{position:absolute;right:2px;bottom:2px;display:flex;gap:1px}
+.cell .cm .mk{font-size:6px;line-height:8px;width:8px}
+.pg.frac .n{display:flex;align-items:center;gap:3px}
+.pg.frac .pos{position:relative;display:inline-block;width:8px;height:10px;border:1px solid var(--mute);border-radius:1px;flex:0 0 auto}
+.pg.frac .pos i{position:absolute;background:var(--c)}
+.pg.frac.open .pos i{background:var(--open)}
+.pg.frac .sz{font-weight:700;color:var(--ink)}
+/* the page viewer: a shared page */
+.leaf.parts{background:#fff;display:block}
+.leaf .lcell{position:absolute;border:1px solid #DBE0E6;overflow:hidden;display:flex;align-items:center;justify-content:center;text-align:center;
+  background:repeating-linear-gradient(45deg,#F1F3F5,#F1F3F5 8px,#E7EAEE 8px,#E7EAEE 16px)}
+.leaf .lcell img{width:100%;height:100%;object-fit:contain;background:#fff}
+.leaf .lcell .phl{font-family:Archivo,sans-serif;color:#8A94A2;padding:0 8%}
+.leaf .lcell .phl b{display:block;font-size:clamp(9px,1.2vw,13px);letter-spacing:.2em;color:#6B7484;margin-bottom:4px}
+.leaf .lcell .phl span{display:block;font-family:"IBM Plex Mono",monospace;font-size:clamp(8px,.9vw,11px)}
+.leaf .lcell.isopen{background:#E8F3EF;border-color:#17795E}
+.leaf .lcell.isopen .phl b{color:#17795E}
+.leaf .lcell.free{background:#fff;border-style:dashed}
+/* page editor: half and quarter pages */
+#fPP{width:64px;text-align:center}
+.sizes{display:inline-flex;gap:4px;margin-left:6px}
+.szb{appearance:none;border:1px solid var(--rule);background:var(--chip);color:var(--ink);border-radius:3px;padding:5px 9px;font-size:12px;font-weight:600;cursor:pointer}
+.szb:hover:not(:disabled){border-color:var(--navy)}
+.szb[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.szb:disabled{opacity:.45;cursor:default}
+.edhint{flex:1 1 100%;margin-top:2px}
+/* the simpler timeline */
+.tkb{appearance:none;border:0;background:transparent;color:var(--ink);text-align:left;width:100%;padding:5px 6px;border-radius:3px;cursor:pointer;
+  display:flex;align-items:baseline;gap:8px;min-width:0;font:inherit}
+.tkb:hover{background:var(--band)}
+.tkb:focus-visible{outline:2px solid var(--gold);outline-offset:0}
+.tkn{font-weight:600;font-size:12.8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.tkt{flex:0 0 auto;font-size:10.5px;color:var(--mute)}
+.tkno{flex:0 0 auto;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--note);border:1px solid currentColor;border-radius:2px;padding:0 3px}
+table.tl tr.isdone .tkn{text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--open) 60%,transparent);color:var(--mute)}
+table.tl tr.isms .tkn{font-style:italic}
+table.tl tr.ph td{padding:0}
+.phb{appearance:none;border:0;background:transparent;width:100%;text-align:left;cursor:pointer;padding:7px 10px;display:flex;align-items:baseline;gap:8px;
+  font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--ink)}
+.phb:focus-visible{outline:2px solid var(--gold);outline-offset:-2px}
+.phb .car{display:inline-block;color:var(--mute);transition:transform .12s ease}
+tr.ph.folded .phb .car{transform:rotate(-90deg)}
+.phb .phm{font-size:10.5px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--mute)}
+.phb .phm b{color:var(--red);font-weight:600}
+table.tl tr.ph td.g{padding:0 10px}
+.track.ph{background:transparent;height:18px}
+.track .pbar{position:absolute;top:7px;height:4px;min-width:3px;border-radius:2px;background:color-mix(in srgb,var(--navy) 55%,transparent);z-index:2}
+.track .pbar.s-done{background:var(--open)}
+.tlnote{margin:8px 0 0}
+/* My plan */
+.mpadd{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+.mpadd #mpTitle{flex:1 1 260px;min-width:0;padding:8px 10px;border:1px solid var(--rule);border-radius:3px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px}
+.mpadd #mpDate,.mpattach input,.mpnotes textarea,#mpEd input[type=date],#mpEd input[type=time],#tlEd textarea,#tlEd input[type=date]{padding:6px 8px;border:1px solid var(--rule);
+  border-radius:3px;background:var(--chip);color:var(--ink);font:inherit;font-size:13px}
+.mpadd input:focus,.mpbar input:focus,.mpnotes textarea:focus,.mpattach input:focus,#tlEd textarea:focus{outline:2px solid var(--gold);outline-offset:0}
+.mpbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 0 12px}
+.mpbar #mpSearch{flex:1 1 240px;max-width:420px;padding:6px 10px;border:1px solid var(--rule);border-radius:14px;background:var(--chip);color:var(--ink);font:inherit;font-size:13px}
+.mpfil{display:flex;flex-wrap:wrap;gap:4px}
+.mpfil .lg{font-size:12px;font-weight:600}
+.mpfil .lg[aria-pressed="true"]{border-color:var(--navy);background:var(--card);box-shadow:var(--shadow)}
+.mpg{margin:0 0 16px}
+.mpg h3,.mpg summary{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--mute);margin:0 0 6px}
+.mpg summary{cursor:pointer}
+.mpg.g-over h3{color:var(--red)}
+.mpc{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:8px 10px;margin:0 0 6px;box-shadow:var(--shadow)}
+.mpc.pin{border-left:3px solid var(--gold)}
+.mpc.over{border-left:3px solid var(--red)}
+.mpc.done{opacity:.62}
+.mpc.done .mpt{text-decoration:line-through}
+.mpck{width:17px;height:17px;margin:2px 0 0;accent-color:var(--open);flex:0 0 auto}
+.mpico{flex:0 0 17px;text-align:center;color:var(--mute);font-size:13px;line-height:1.5}
+.mpc.k-event .mpico{color:var(--navy)}
+.mpopen{appearance:none;border:0;background:transparent;padding:0;text-align:left;cursor:pointer;flex:1 1 auto;min-width:0;color:inherit;font:inherit}
+.mpopen:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.mpt{display:block;font-size:14px;font-weight:600;color:var(--ink);line-height:1.35}
+.mpmeta{display:flex;flex-wrap:wrap;gap:4px 8px;margin-top:3px;font-size:11px;align-items:center}
+.mpk,.mpd,.mps,.mptag{display:inline-block;border-radius:10px;padding:0 7px;line-height:17px;font-size:10.5px;font-weight:600}
+.mpk{background:var(--band);color:var(--body)}
+.mpd{background:color-mix(in srgb,var(--navy) 9%,var(--card));color:var(--navy);font-family:"IBM Plex Mono",monospace;font-weight:500}
+.mpd.dl{background:color-mix(in srgb,var(--amber) 13%,var(--card));color:var(--amber)}
+.mpd.over{background:color-mix(in srgb,var(--red) 13%,var(--card));color:var(--red)}
+.mps.s-doing{background:var(--lay-bg);color:var(--lay)}
+.mps.s-waiting{background:color-mix(in srgb,var(--note) 14%,var(--card));color:var(--note)}
+.mptag{color:var(--mute);border:1px solid var(--rule);font-weight:500}
+.mpn{display:block;font-size:12.5px;color:var(--body);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mpempty{padding:18px 4px}
+.mpcalhead{display:flex;align-items:center;gap:8px;margin:0 0 10px;flex-wrap:wrap}
+.mpcalhead b{font-size:15px;color:var(--ink);min-width:150px;text-align:center}
+.mpcal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--rule);border-radius:3px;background:var(--rule);gap:1px;overflow:hidden}
+.mpwd{background:var(--head);color:var(--head-ink);font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:6px 8px}
+.mpday{background:var(--card);min-height:92px;padding:4px 5px 6px;cursor:pointer;display:flex;flex-direction:column;gap:3px;min-width:0}
+.mpday:hover{background:color-mix(in srgb,var(--gold) 6%,var(--card))}
+.mpday.out{background:var(--band)}
+.mpday.out .dn{opacity:.5}
+.mpday .dn{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--mute)}
+.mpday.today .dn{color:#fff;background:var(--red);border-radius:9px;padding:0 6px;align-self:flex-start}
+.mpp{appearance:none;border:0;border-left:3px solid var(--navy);background:color-mix(in srgb,var(--navy) 8%,var(--card));color:var(--ink);text-align:left;
+  font:600 11px/1.3 Archivo,sans-serif;padding:2px 5px;border-radius:2px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mpp.k-note{border-left-color:var(--mute)}
+.mpp.k-event{border-left-color:var(--gold)}
+.mpp.dl{border-left-color:var(--amber);background:color-mix(in srgb,var(--amber) 11%,var(--card))}
+.mpp.over{border-left-color:var(--red);background:color-mix(in srgb,var(--red) 11%,var(--card))}
+.mpp.done{opacity:.55;text-decoration:line-through}
+.mpnotes{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mpnotes textarea{width:100%;min-height:180px;resize:vertical;line-height:1.45;font-size:13.5px}
+.mpattach{display:flex;flex-direction:column;gap:6px;min-width:0}
+.mpattach .edrow input[type=url]{flex:2 1 220px;min-width:0}
+.mpattach .edrow input[type=text]{flex:1 1 140px;min-width:0}
+.mprow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:13px}
+.mprow a{color:var(--navy);font-weight:600;overflow-wrap:anywhere}
+.mpprog{flex:1 1 100%}
+#mpEd .edbody,#tlEd .edbody{align-items:start}
+#mpEd .edbody .k,#tlEd .edbody .k{padding-top:7px}
+#tlEd textarea{width:100%;resize:vertical}
+
 @media (max-width:720px){
   header.mast{padding:18px 16px 0}
   main{padding:18px 16px 80px}
@@ -449,7 +605,8 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
   .pvside.left{order:2}
   .pvside.right{order:3}
   .statrow{flex-direction:column}
-  .sidebtns{flex:none;flex-direction:row}
+  .sidebtns{flex:none;flex-direction:row;flex-wrap:wrap}
+  .sidebtns .nb{flex:1 1 auto;width:auto}
   dialog.withside .pvstage.fit .bookwrap{height:min(52vh,calc((96vw - 40px) * .707))}
   dialog.withside .pvstage.fit .bookwrap.single{height:min(52vh,calc((96vw - 40px) * 1.41))}
   .pvpage{padding:10px 8px 6px}
@@ -458,6 +615,11 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
   .edbody{grid-template-columns:1fr}
   .chat{right:10px;bottom:10px;left:auto}
   .chatbox{width:calc(100vw - 20px);height:min(70vh,520px)}
+  .boardbar{flex-direction:column;gap:6px}
+  .mpday{min-height:64px}
+  .mpp{font-size:10px}
+  .mpcal{font-size:11px}
+  .sizes{margin-left:0}
   .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
   .stat .sv{font-size:19px}
 }
@@ -473,6 +635,7 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
   <nav class="tabs" role="tablist" aria-label="Pages">
     <button class="tab" role="tab" id="t0" aria-controls="p0" aria-selected="true"><span class="tabnum">01</span>Flat Plan</button>
     <button class="tab" role="tab" id="t1" aria-controls="p1" aria-selected="false" tabindex="-1"><span class="tabnum">02</span>Timeline</button>
+    <button class="tab" role="tab" id="t2" aria-controls="p2" aria-selected="false" tabindex="-1" hidden><span class="tabnum">03</span>My plan<svg class="tablock" viewBox="0 0 10 12" aria-label="private"><path d="M2.6 5.2V3.7a2.4 2.4 0 0 1 4.8 0v1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="1" y="5" width="8" height="6.5" rx="1.3" fill="currentColor"/></svg></button>
   </nav>
 </header>
 <main>
@@ -484,15 +647,17 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
     <button class="nb" id="btnSignIn" type="button" hidden>Sign in for page details</button>
     <button class="nb" id="btnMentions" type="button" hidden aria-haspopup="true">@ Mentions<span class="cnt" id="mentCnt" hidden></span></button>
     <button class="nb" id="btnReset" type="button" hidden>Reset practice</button>
+    <button class="nb" id="btnPublic" type="button" hidden title="See the board as anyone who is not signed in sees it">Public view</button>
     <button class="nb" id="btnEdit" type="button" hidden>Edit plan</button>
     <div class="pop" id="mentPop" hidden></div>
   </div>
+  <div class="pubnote" id="pubNote" hidden><b>Public view.</b> This is what anyone with the link sees when not signed in: generic page names only, no clients, countries, notes or sample pages.</div>
   <div class="warn" id="warn" hidden></div>
 
   <h2 class="sec">Sections</h2>
   <div class="statrow">
     <div class="stats" id="stats"></div>
-    <div class="sidebtns">
+    <div class="sidebtns" id="sidebtns">
       <button class="nb" id="btnHistory" type="button" hidden>History</button>
       <button class="nb" id="btnPeople" type="button" hidden>Approved people</button>
       <button class="nb" id="btnXlsx" type="button">Export Excel</button>
@@ -508,7 +673,8 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
   <p class="m sumnote">Open to sell: pages still for sale. Sold: pages sold. % sold: sold pages as a share of the pages for sale (open plus sold). Content done and Layout done: pages marked done, with their share of all pages.</p>
 
   <h2 class="sec">The board</h2>
-  <div class="legend" id="legend"></div>
+  <div class="boardbar"><div class="legend" id="legend"></div>
+    <span class="boardtools"><button class="lnk" type="button" id="minAll">Minimise all</button><button class="lnk" type="button" id="maxAll">Show all</button></span></div>
   <div class="board" id="board"></div>
 </section>
 
@@ -516,12 +682,38 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
   <div class="toolbar">
     <span class="status" id="tlStatus"></span>
     <span class="grow"></span>
+    <button class="nb" id="tlFold" type="button" hidden>Fold or open all phases</button>
     <button class="nb" id="tlAdd" type="button" hidden>+ Add task</button>
   </div>
   <h2 class="sec">Production timeline · printed book</h2>
   <div class="tlgate" id="tlGate" hidden>The production timeline is for the MECSR team. <button class="nb" type="button" id="tlSignIn">Sign in</button> with your MECSR Google account to see and update it.</div>
   <div class="tlsum" id="tlSum"></div>
   <div class="tlwrap" id="tlWrap"></div>
+  <p class="m tlnote" id="tlNote">Click a task for its start date, team and notes, or to move or delete it. Click a phase to fold it.</p>
+</section>
+
+<section role="tabpanel" id="p2" aria-labelledby="t2" hidden>
+  <div class="toolbar">
+    <span class="status" id="mpStatus"></span>
+    <span class="grow"></span>
+    <span class="seg" role="radiogroup" aria-label="View"><label><input type="radio" name="mpv" value="list" checked>List</label><label><input type="radio" name="mpv" value="cal">Calendar</label></span>
+  </div>
+  <h2 class="sec">My plan · tasks, notes and dates</h2>
+  <div class="tlgate" id="mpGate" hidden></div>
+  <div id="mpBody" hidden>
+    <form class="mpadd" id="mpAdd" autocomplete="off">
+      <span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpk" value="task" checked>Task</label><label><input type="radio" name="mpk" value="note">Note</label><label><input type="radio" name="mpk" value="event">Date</label></span>
+      <input type="text" id="mpTitle" maxlength="200" placeholder="Add a task, a note or a date, then press Enter" aria-label="Title">
+      <input type="date" id="mpDate" title="Deadline (optional)" aria-label="Deadline (optional)">
+      <button class="nb primary" type="submit">Add</button>
+      <button class="nb" type="button" id="mpMore">Add with details…</button>
+    </form>
+    <div class="mpbar">
+      <input type="search" id="mpSearch" placeholder="Search titles, notes, tags, links and files" aria-label="Search">
+      <span class="mpfil" id="mpFil" role="group" aria-label="Show"><button type="button" class="lg" data-mpk="all">All</button><button type="button" class="lg" data-mpk="task">Tasks</button><button type="button" class="lg" data-mpk="note">Notes</button><button type="button" class="lg" data-mpk="event">Dates</button></span>
+    </div>
+    <div id="mpOut"></div>
+  </div>
 </section>
 </main>
 
@@ -577,8 +769,10 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
       <div class="edrow"><select id="fSection"></select><input type="text" id="fNewSection" placeholder="New section name" maxlength="60" hidden></div>
       <label class="k" for="fType">Type</label><select id="fType"></select>
       <label class="k" for="fPP">Pages</label>
-      <div class="edrow"><button class="zb" type="button" id="ppDown" aria-label="One page fewer">&minus;</button>
-        <input type="number" id="fPP" min="1" max="400" step="1"><button class="zb" type="button" id="ppUp" aria-label="One page more">+</button></div>
+      <div class="edrow"><button class="zb" type="button" id="ppDown" aria-label="Smaller">&minus;</button>
+        <input type="text" id="fPP" inputmode="decimal" autocomplete="off" aria-describedby="ppHint"><button class="zb" type="button" id="ppUp" aria-label="Bigger">+</button>
+        <span class="sizes" role="group" aria-label="Part of a page"><button class="szb" type="button" id="ppHalf" aria-pressed="false">&frac12; page</button><button class="szb" type="button" id="ppQuarter" aria-pressed="false">&frac14; page</button></span>
+        <span class="m edhint" id="ppHint">Half and quarter pages share a page: halves top and bottom, quarters in a 2 &times; 2 grid. Sell each one on its own.</span></div>
       <span class="k">Status</span>
       <div class="edrow"><span class="seg" role="radiogroup" aria-label="Sales status">
           <label class="o"><input type="radio" name="st" value="open">OPEN</label><label><input type="radio" name="st" value="sold">Sold</label><label><input type="radio" name="st" value="house">House</label></span>
@@ -606,6 +800,74 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
       <span class="grow"></span>
       <button class="nb" type="button" id="edCancel">Cancel</button>
       <button class="nb primary" type="submit" id="edSave">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- one timeline task -->
+<dialog class="pv small" id="tlEd" aria-label="Task">
+  <form class="pvbox" id="tlForm" autocomplete="off">
+    <div class="pvhead">
+      <div class="ht"><div class="dt" id="tlEdTitle">Task</div><div class="dm" id="tlEdMeta"></div></div>
+      <button class="xbtn" id="tlEdClose" type="button" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="edbody">
+      <label class="k" for="tfTask">Task</label><input type="text" id="tfTask" maxlength="160" required>
+      <label class="k" for="tfTeam">Team</label><input type="text" id="tfTeam" maxlength="60" list="tlTeams"><datalist id="tlTeams"></datalist>
+      <label class="k" for="tfStart">Start</label><div class="edrow"><input type="date" id="tfStart"></div>
+      <label class="k" for="tfDue">Due</label><div class="edrow"><input type="date" id="tfDue"></div>
+      <label class="k" for="tfStatus">Status</label><select id="tfStatus"></select>
+      <span class="k">Milestone</span><div class="edrow"><label class="chk"><input type="checkbox" id="tfMs"> A single date, shown as a diamond</label></div>
+      <label class="k" for="tfNotes">Notes</label><textarea id="tfNotes" rows="4" maxlength="500"></textarea>
+    </div>
+    <div class="confirm" id="tlConfirm" hidden><span id="tlConfirmText"></span>
+      <button class="nb danger" type="button" id="tlYes">Delete</button><button class="nb" type="button" id="tlNo">Keep</button></div>
+    <div class="pvfoot">
+      <button class="nb danger" type="button" id="tlDel">Delete</button>
+      <button class="nb" type="button" id="tlUp" title="Move up (saved at once)">&uarr; Up</button>
+      <button class="nb" type="button" id="tlDown" title="Move down (saved at once)">&darr; Down</button>
+      <button class="nb" type="button" id="tlAddAfter">+ Task after</button>
+      <span class="grow"></span>
+      <button class="nb" type="button" id="tlCancel">Cancel</button>
+      <button class="nb primary" type="submit">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- My plan: one task, note or date (orient@mecsc.org only) -->
+<dialog class="pv mid" id="mpEd" aria-label="My plan entry">
+  <form class="pvbox" id="mpForm" autocomplete="off">
+    <div class="pvhead">
+      <div class="ht"><div class="dt" id="mpEdTitle">Task</div><div class="dm" id="mpEdMeta"></div></div>
+      <button class="xbtn" id="mpEdClose" type="button" aria-label="Close">&#10005;</button>
+    </div>
+    <div class="edbody">
+      <span class="k">Kind</span>
+      <div class="edrow"><span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpfk" value="task">Task</label><label><input type="radio" name="mpfk" value="note">Note</label><label><input type="radio" name="mpfk" value="event">Date</label></span></div>
+      <label class="k" for="mpfTitle">Title</label><input type="text" id="mpfTitle" maxlength="200" required>
+      <label class="k" for="mpfDate">Date</label>
+      <div class="edrow"><input type="date" id="mpfDate"><input type="time" id="mpfTime" aria-label="Time (optional)"><span class="m">when it happens or when you will do it</span></div>
+      <label class="k" for="mpfDue">Deadline</label><div class="edrow"><input type="date" id="mpfDue"></div>
+      <span class="k" id="mpfStatusK">Status</span>
+      <div class="edrow" id="mpfStatusRow"><span class="seg" role="radiogroup" aria-label="Status"><label><input type="radio" name="mpfs" value="todo">To do</label><label><input type="radio" name="mpfs" value="doing">Doing</label><label><input type="radio" name="mpfs" value="waiting">Waiting</label><label class="o"><input type="radio" name="mpfs" value="done">Done</label></span></div>
+      <label class="k" for="mpfTags">Tags</label><input type="text" id="mpfTags" maxlength="200" placeholder="Comma separated, e.g. sales, printer">
+      <span class="k">Pin</span><div class="edrow"><label class="chk"><input type="checkbox" id="mpfPin"> Keep at the top of the list</label></div>
+      <label class="k" for="mpfNotes">Notes</label>
+      <div class="mpnotes"><textarea id="mpfNotes" rows="10" maxlength="50000"></textarea><div class="cbar"><button class="nb" type="button" id="mpfCopy">Copy notes</button></div></div>
+      <span class="k">Links</span>
+      <div class="mpattach"><div id="mpfLinkList"></div>
+        <div class="edrow"><input type="url" id="mpfUrl" placeholder="https://…" aria-label="Link address"><input type="text" id="mpfLabel" placeholder="Label (optional)" aria-label="Link label" maxlength="120"><button class="nb" type="button" id="mpfLinkAdd">Add link</button></div></div>
+      <span class="k">Files</span>
+      <div class="mpattach"><div id="mpfFileList"></div>
+        <div class="edrow"><button class="nb" type="button" id="mpfFileBtn">Attach files</button><input type="file" id="mpfFile" multiple hidden></div></div>
+    </div>
+    <div class="confirm" id="mpConfirm" hidden><span>Delete this entry and its files?</span>
+      <button class="nb danger" type="button" id="mpYes">Delete</button><button class="nb" type="button" id="mpNo">Keep</button></div>
+    <div class="pvfoot">
+      <button class="nb danger" type="button" id="mpDel">Delete</button>
+      <span class="grow"></span>
+      <button class="nb" type="button" id="mpCancel">Cancel</button>
+      <button class="nb primary" type="submit" id="mpSave">Save</button>
     </div>
   </form>
 </dialog>
@@ -644,9 +906,9 @@ tr.isover .track .bar,tr.isover .track .dia{box-shadow:0 0 0 1.5px var(--red)}
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="plan-seed.js"></script>
-<script src="timeline-seed.js"></script>
-<script src="firebase-config.js"></script>
-<script src="flatplan.js?v=20261106a"></script>
+<script src="plan-seed.js?v=20261106b"></script>
+<script src="timeline-seed.js?v=20261106b"></script>
+<script src="firebase-config.js?v=20261106b"></script>
+<script src="flatplan.js?v=20261106b"></script>
 </body>
 </html>
