@@ -1,0 +1,182 @@
+rules_version = '2';
+// Firestore rules for the MECSR 2027 flat plan (project directory-ff8f1), version of 6 Nov 2026 (stress-test fixes), with sample PDFs and tagging people before they sign in.
+// Paste into Firebase console > Firestore Database > Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Who may change the plan and use notes, chat and the timeline: anyone signed in with Google as @mecsc.org or
+    // @mecsr.org, plus anyone listed in the "editors" collection (document ID = their email in lower case).
+    function isEditor() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && (request.auth.token.email.lower().matches('.*@(mecsc|mecsr)[.]org$')
+            || exists(/databases/$(database)/documents/editors/$(request.auth.token.email.lower())));
+    }
+    // The owner approves editors outside @mecsc.org and @mecsr.org, and uploads the page proofs.
+    function isOwner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() == 'orient@mecsc.org';
+    }
+    // A save of the plan or the timeline must come with its entry in the change log, written in the same transaction.
+    function logged(planId, changeId) {
+      return changeId is string
+        && !exists(/databases/$(database)/documents/flatplans/$(planId)/changes/$(changeId))     // must be a NEW entry
+        && existsAfter(/databases/$(database)/documents/flatplans/$(planId)/changes/$(changeId));
+    }
+    // A new note or chat message: written by the signed-in editor, at the server time, within the size limits.
+    function newMessage(fields) {
+      return request.resource.data.keys().hasOnly(fields)
+        && request.resource.data.by == request.auth.token.email
+        && request.resource.data.at == request.time
+        && request.resource.data.ip is string
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.mentions is list
+        && request.resource.data.mentions.size() <= 20;
+    }
+    // The author may edit or delete (blank) their own note or message.
+    function ownEdit() {
+      return resource.data.by == request.auth.token.email
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text', 'mentions', 'editedAt', 'deleted'])
+        && request.resource.data.editedAt == request.time
+        && request.resource.data.text is string
+        && request.resource.data.text.size() <= 2000
+        && request.resource.data.mentions is list
+        && request.resource.data.mentions.size() <= 20;
+    }
+    // Any editor may mark a note resolved or open it again; the change carries their email and the server time.
+    function resolving() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['resolved', 'resolvedBy', 'resolvedAt'])
+        && request.resource.data.resolved is bool
+        && request.resource.data.resolvedBy == request.auth.token.email
+        && request.resource.data.resolvedAt == request.time;
+    }
+
+    match /flatplans/{planId} {
+      // The plan is public, like the page that shows it (owner's decision, 6 Nov 2026): it names the clients who bought
+      // pages, but holds no emails or IP addresses. Page details (proofs, samples, notes) are editors only.
+      allow read: if true;
+      allow create, update: if isEditor()
+        && request.resource.data.keys().hasOnly(['items', 'version', 'updatedAt', 'lastChange'])
+        && request.resource.data.items is list
+        && request.resource.data.items.size() <= 1000
+        && request.resource.data.updatedAt == request.time
+        && logged(planId, request.resource.data.lastChange);
+      allow delete: if false;
+
+      // The change log: who, when, from which IP address, what changed. Editors can read it; nobody can edit or delete it.
+      match /changes/{changeId} {
+        allow read: if isEditor();
+        allow create: if isEditor()
+          && request.resource.data.by == request.auth.token.email
+          && request.resource.data.at == request.time
+          && request.resource.data.keys().hasOnly(['at', 'by', 'name', 'ip', 'action', 'summary', 'version', 'items', 'rows'])
+          && request.resource.data.ip is string
+          && request.resource.data.action is string
+          && request.resource.data.summary is string;
+        allow update, delete: if false;
+      }
+
+      // The production timeline.
+      match /meta/{docId} {
+        allow read: if isEditor();
+        allow create, update: if isEditor()
+          && docId == 'timeline'
+          && request.resource.data.keys().hasOnly(['rows', 'version', 'updatedAt', 'lastChange'])
+          && request.resource.data.rows is list
+          && request.resource.data.rows.size() <= 300
+          && request.resource.data.updatedAt == request.time
+          && logged(planId, request.resource.data.lastChange);
+        allow delete: if false;
+      }
+
+      // Notes on a page or spread.
+      match /notes/{noteId} {
+        allow read: if isEditor();
+        allow create: if isEditor()
+          && newMessage(['itemId', 'text', 'by', 'name', 'at', 'mentions', 'ip'])
+          && request.resource.data.itemId is string;
+        allow update: if isEditor() && (ownEdit() || resolving());
+        allow delete: if false;
+      }
+
+      // Sample PDFs uploaded for an item, stored as one or two page images (under Firestore's 1 MB per record).
+      // Editors only. Each upload or delete also writes its own entry in the change log.
+      match /samples/{itemId} {
+        allow read: if isEditor();
+        allow create, update: if isEditor()
+          && request.resource.data.keys().hasOnly(['pages', 'name', 'by', 'byName', 'at', 'ip'])
+          && request.resource.data.pages is list
+          && request.resource.data.pages.size() >= 1
+          && request.resource.data.pages.size() <= 2
+          && request.resource.data.pages[0] is string
+          && request.resource.data.pages[0].matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')
+          && (request.resource.data.pages.size() == 1 || (request.resource.data.pages[1] is string
+              && request.resource.data.pages[1].matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')))
+          && request.resource.data.name is string
+          && request.resource.data.by == request.auth.token.email
+          && request.resource.data.at == request.time;
+        allow delete: if isEditor();
+      }
+
+      // The v14 page proofs, in chunks under Firestore's 1 MB per record. Editors read; only the owner uploads.
+      match /proofs/{chunkId} {
+        allow read: if isEditor();
+        allow write: if isOwner();
+      }
+
+      // The team chat.
+      match /chat/{msgId} {
+        allow read: if isEditor();
+        allow create: if isEditor() && newMessage(['text', 'by', 'name', 'at', 'mentions', 'ip']);
+        allow update: if isEditor() && ownEdit();
+        allow delete: if false;
+      }
+    }
+
+    // People who can be tagged with @. Each editor writes their own entry when they sign in. An editor may also add
+    // someone who has not signed in yet (an @mecsc.org / @mecsr.org email, or a listed editor) so they can be tagged;
+    // that person's own sign-in later fills in their Google name.
+    match /people/{email} {
+      allow read: if isEditor();
+      allow create: if isEditor()
+        && request.resource.data.email == email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && ((email == request.auth.token.email.lower()
+             && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt', 'readAt']))
+          || (email != request.auth.token.email.lower()
+             && request.resource.data.keys().hasOnly(['email', 'name', 'addedBy', 'addedAt'])
+             && request.resource.data.addedBy == request.auth.token.email
+             && request.resource.data.addedAt == request.time
+             && (email.matches('.*@(mecsc|mecsr)[.]org$')
+                 || exists(/databases/$(database)/documents/editors/$(email)))));
+      allow update: if isEditor()
+        && email == request.auth.token.email.lower()
+        && request.resource.data.keys().hasOnly(['email', 'name', 'seenAt', 'readAt', 'addedBy', 'addedAt'])
+        && request.resource.data.email == email
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 120;
+      allow delete: if false;
+    }
+
+    // The editor list: approved by the owner in the page ("Approved people"), or in the Firebase console.
+    match /editors/{email} {
+      allow read: if isEditor();
+      allow create: if isOwner()
+        && email == email.lower()
+        && email.matches('^[^@/ ]+@[^@/ ]+[.][a-z]{2,}$')
+        && request.resource.data.keys().hasOnly(['name', 'addedBy', 'addedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.addedBy == request.auth.token.email
+        && request.resource.data.addedAt == request.time;
+      allow update: if false;
+      allow delete: if isOwner();
+    }
+  }
+}
