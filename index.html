@@ -527,12 +527,12 @@ table.tl tr.ph td.g{padding:0 10px}
 .tlnote{margin:8px 0 0}
 /* My plan */
 .mpadd{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
-.mpadd #mpTitle{flex:1 1 260px;min-width:0;padding:8px 10px;border:1px solid var(--rule);border-radius:3px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px}
+.mpadd #mpTitle,.mpadd #mpSrcName,.mpadd #mpSrcUrl{flex:1 1 260px;min-width:0;padding:8px 10px;border:1px solid var(--rule);border-radius:3px;background:var(--chip);color:var(--ink);font:inherit;font-size:14px}
 .mpadd #mpDate,.mpattach input,.mpnotes textarea,#mpEd input[type=date],#mpEd input[type=time],#tlEd textarea,#tlEd input[type=date]{padding:6px 8px;border:1px solid var(--rule);
   border-radius:3px;background:var(--chip);color:var(--ink);font:inherit;font-size:13px}
-.mpadd input:focus,.mpbar input:focus,.mpnotes textarea:focus,.mpattach input:focus,#tlEd textarea:focus{outline:2px solid var(--gold);outline-offset:0}
+.mpadd input:focus,#mpSearch:focus,.mpnotes textarea:focus,.mpattach input:focus,#tlEd textarea:focus{outline:2px solid var(--gold);outline-offset:0}
 .mpbar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:0 0 12px}
-.mpbar #mpSearch{flex:1 1 240px;max-width:420px;padding:6px 10px;border:1px solid var(--rule);border-radius:14px;background:var(--chip);color:var(--ink);font:inherit;font-size:13px}
+#mpSearch{flex:0 1 320px;min-width:0;padding:6px 10px;border:1px solid var(--rule);border-radius:14px;background:var(--chip);color:var(--ink);font:inherit;font-size:13px}
 .mpfil{display:flex;flex-wrap:wrap;gap:4px}
 .mpfil .lg{font-size:12px;font-weight:600}
 .mpfil .lg[aria-pressed="true"]{border-color:var(--navy);background:var(--card);box-shadow:var(--shadow)}
@@ -582,7 +582,7 @@ table.tl tr.ph td.g{padding:0 10px}
 .mpnotes{display:flex;flex-direction:column;gap:4px;min-width:0}
 .mpnotes textarea{width:100%;min-height:180px;resize:vertical;line-height:1.45;font-size:13.5px}
 .mpattach{display:flex;flex-direction:column;gap:6px;min-width:0}
-.mpattach .edrow input[type=url]{flex:2 1 220px;min-width:0}
+.mpattach .edrow input[type=url],.mpattach .edrow #mpfUrl{flex:2 1 220px;min-width:0}
 .mpattach .edrow input[type=text]{flex:1 1 140px;min-width:0}
 .mprow{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:13px}
 .mprow a{color:var(--navy);font-weight:600;overflow-wrap:anywhere}
@@ -590,6 +590,55 @@ table.tl tr.ph td.g{padding:0 10px}
 #mpEd .edbody,#tlEd .edbody{align-items:start}
 #mpEd .edbody .k,#tlEd .edbody .k{padding-top:7px}
 #tlEd textarea{width:100%;resize:vertical}
+
+/* 16 Nov 2026: the sections table folds; the page editor has progress on one line, source links, a quieter sample row and a
+   Position row; My plan has a list of sources */
+table.sum th:first-child{text-align:left;padding-left:10px}
+table.sum th .mini{margin-right:8px;vertical-align:-4px;background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
+table.sum th .mini:hover{border-color:#fff;color:#fff}
+.sumwrap.min tbody{display:none}
+.sumwrap.min table.sum tfoot td{border-top:0}
+#ed{max-width:min(700px,96vw)}
+.prog3{gap:8px 20px}
+.prog3.nums{gap:8px 16px}
+.prog3.nums .lkx{display:none}
+.pg1 .status{letter-spacing:0}
+.pg1{display:inline-flex;align-items:center;gap:6px}
+.pg1 .pl{font-size:13px;color:var(--ink)}
+.edbody .pg1 input[type=number]{width:60px;padding:5px 6px}
+.nb.sm{padding:4px 9px;font-size:11px}
+.lkbox{display:flex;flex-direction:column;gap:6px;min-width:0}
+.edbody #fLinkUrl{flex:2 1 210px;min-width:0;width:auto;font-size:13px;padding:6px 8px}
+.edbody #fLinkLabel{flex:1 1 130px;min-width:0;width:auto;font-size:13px;padding:6px 8px}
+.lkrow{display:flex;gap:4px 10px;align-items:baseline;flex-wrap:wrap;font-size:13px;margin:0 0 3px}
+.lkrow a{color:var(--navy);font-weight:600;overflow-wrap:anywhere}
+.lkrow .lnk:disabled{opacity:.4;cursor:default}
+.edbody .k.quiet{font-weight:600;opacity:.8}
+.edbody .k small{display:block;margin-top:2px;font-size:9.5px;font-weight:400;letter-spacing:.02em;text-transform:none;font-style:italic}
+.smpbox{min-width:0;font-size:11.5px;color:var(--mute)}
+.smpbox .edrow{gap:6px 8px}
+.edbody .smpbox input[type=number]{width:56px;padding:4px 6px;font-size:12px}
+.smpbox .pdfrow{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:4px;padding-left:12px;border-left:1px solid var(--rule)}
+.smpbox .pdfinfo{flex:0 1 auto;font-size:11.5px;color:var(--mute)}
+.smpnote{margin:4px 0 0;font-size:11px;font-style:italic;color:var(--mute)}
+.slinks .lkrow{font-size:12.5px}
+h2.sec.fold{display:flex;align-items:center}
+h2.sec .mini{margin-right:9px}
+.edbody .k.top{align-self:start;padding-top:9px}
+#mpForm.src .mpnotes textarea{min-height:96px;height:120px}
+.seccount{margin-left:8px;font-family:"IBM Plex Mono",monospace;font-weight:400;letter-spacing:0;font-size:11px}
+.mpbar .grow{flex:1 1 auto}
+.mpjump{color:var(--navy);cursor:pointer;text-decoration:underline}
+.mpsrc{display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;background:var(--card);border:1px solid var(--rule);border-radius:4px;padding:7px 10px;
+  margin:0 0 5px;box-shadow:var(--shadow)}
+.mpsrc.pin{border-left:3px solid var(--gold)}
+.mpsrc .mpopen{flex:1 1 230px}
+.srclinks{display:flex;flex-wrap:wrap;gap:5px;flex:2 1 320px;min-width:0;align-items:center}
+.srcchip{display:inline-block;max-width:100%;border:1px solid var(--rule);border-radius:12px;padding:2px 10px;font-size:12px;font-weight:600;color:var(--navy);
+  text-decoration:none;background:var(--chip);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.srcchip:hover{border-color:var(--navy)}
+.srcchip:focus-visible{outline:2px solid var(--gold);outline-offset:1px}
+.mpsrc .lnk{flex:0 0 auto;white-space:nowrap}
 
 @media (max-width:720px){
   header.mast{padding:18px 16px 0}
@@ -616,6 +665,8 @@ table.tl tr.ph td.g{padding:0 10px}
   .chat{right:10px;bottom:10px;left:auto}
   .chatbox{width:calc(100vw - 20px);height:min(70vh,520px)}
   .boardbar{flex-direction:column;gap:6px}
+  #mpSearch{flex:1 1 100%}
+  .edbody .k.top{padding-top:0}
   .mpday{min-height:64px}
   .mpp{font-size:10px}
   .mpcal{font-size:11px}
@@ -664,13 +715,13 @@ table.tl tr.ph td.g{padding:0 10px}
       <button class="nb" id="btnPdf" type="button">Export PDF</button>
     </div>
   </div>
-  <div class="sumwrap"><table class="sum">
-    <thead><tr><th>Section</th><th>Pages</th><th>No. of pages</th><th>Open to sell</th><th>Sold</th><th>% sold</th>
+  <div class="sumwrap" id="sumWrap"><table class="sum">
+    <thead><tr><th><button class="mini" type="button" id="sumMin" aria-expanded="true" aria-controls="sumBody" aria-label="Minimise the sections table" title="Minimise this table">&minus;</button>Section</th><th>Pages</th><th>No. of pages</th><th>Open to sell</th><th>Sold</th><th>% sold</th>
       <th>Content done</th><th>Layout done</th></tr></thead>
     <tbody id="sumBody"></tbody>
     <tfoot><tr id="sumFoot"></tr></tfoot>
   </table></div>
-  <p class="m sumnote">Open to sell: pages still for sale. Sold: pages sold. % sold: sold pages as a share of the pages for sale (open plus sold). Content done and Layout done: pages marked done, with their share of all pages.</p>
+  <p class="m sumnote" id="sumNote">Open to sell: pages still for sale. Sold: pages sold. % sold: sold pages as a share of the pages for sale (open plus sold). Content done and Layout done: pages marked done, with their share of all pages.</p>
 
   <h2 class="sec">The board</h2>
   <div class="boardbar"><div class="legend" id="legend"></div>
@@ -696,23 +747,35 @@ table.tl tr.ph td.g{padding:0 10px}
   <div class="toolbar">
     <span class="status" id="mpStatus"></span>
     <span class="grow"></span>
-    <span class="seg" role="radiogroup" aria-label="View"><label><input type="radio" name="mpv" value="list" checked>List</label><label><input type="radio" name="mpv" value="cal">Calendar</label></span>
+    <input type="search" id="mpSearch" placeholder="Search tasks, notes, dates and sources" aria-label="Search My plan">
   </div>
-  <h2 class="sec">My plan · tasks, notes and dates</h2>
   <div class="tlgate" id="mpGate" hidden></div>
   <div id="mpBody" hidden>
-    <form class="mpadd" id="mpAdd" autocomplete="off">
-      <span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpk" value="task" checked>Task</label><label><input type="radio" name="mpk" value="note">Note</label><label><input type="radio" name="mpk" value="event">Date</label></span>
-      <input type="text" id="mpTitle" maxlength="200" placeholder="Add a task, a note or a date, then press Enter" aria-label="Title">
-      <input type="date" id="mpDate" title="Deadline (optional)" aria-label="Deadline (optional)">
-      <button class="nb primary" type="submit">Add</button>
-      <button class="nb" type="button" id="mpMore">Add with details…</button>
-    </form>
-    <div class="mpbar">
-      <input type="search" id="mpSearch" placeholder="Search titles, notes, tags, links and files" aria-label="Search">
-      <span class="mpfil" id="mpFil" role="group" aria-label="Show"><button type="button" class="lg" data-mpk="all">All</button><button type="button" class="lg" data-mpk="task">Tasks</button><button type="button" class="lg" data-mpk="note">Notes</button><button type="button" class="lg" data-mpk="event">Dates</button></span>
+    <h2 class="sec fold"><button class="mini" type="button" id="mpMinPlan" data-mpmin="plan" aria-expanded="true" aria-controls="mpPlan">&minus;</button>My plan &middot; tasks, notes and dates</h2>
+    <div id="mpPlan">
+      <form class="mpadd" id="mpAdd" autocomplete="off">
+        <span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpk" value="task" checked>Task</label><label><input type="radio" name="mpk" value="note">Note</label><label><input type="radio" name="mpk" value="event">Date</label></span>
+        <input type="text" id="mpTitle" maxlength="200" placeholder="Add a task, a note or a date, then press Enter" aria-label="Title">
+        <input type="date" id="mpDate" title="Deadline (optional)" aria-label="Deadline (optional)">
+        <button class="nb primary" type="submit">Add</button>
+        <button class="nb" type="button" id="mpMore">Add with details&hellip;</button>
+      </form>
+      <div class="mpbar">
+        <span class="mpfil" id="mpFil" role="group" aria-label="Show"><button type="button" class="lg" data-mpk="all">All</button><button type="button" class="lg" data-mpk="task">Tasks</button><button type="button" class="lg" data-mpk="note">Notes</button><button type="button" class="lg" data-mpk="event">Dates</button></span>
+        <span class="grow"></span>
+        <span class="seg" role="radiogroup" aria-label="View"><label><input type="radio" name="mpv" value="list" checked>List</label><label><input type="radio" name="mpv" value="cal">Calendar</label></span>
+      </div>
+      <div id="mpOut"></div>
     </div>
-    <div id="mpOut"></div>
+    <h2 class="sec fold" id="mpSrcHead"><button class="mini" type="button" id="mpMinSrc" data-mpmin="src" aria-expanded="true" aria-controls="mpSrc">&minus;</button>Sources &middot; lists, files and links<span class="seccount" id="mpSrcCount"></span></h2>
+    <div id="mpSrc">
+      <form class="mpadd" id="mpSrcAdd" autocomplete="off">
+        <input type="text" id="mpSrcName" maxlength="200" placeholder="Name, e.g. List of BOD" aria-label="Name of the list or source">
+        <input type="text" inputmode="url" id="mpSrcUrl" placeholder="Link: Google Drive, OneDrive, a web page&hellip; (optional)" aria-label="Link">
+        <button class="nb primary" type="submit">Add</button>
+      </form>
+      <div id="mpSrcOut"></div>
+    </div>
   </div>
 </section>
 </main>
@@ -768,34 +831,40 @@ table.tl tr.ph td.g{padding:0 10px}
       <label class="k" for="fSection">Section</label>
       <div class="edrow"><select id="fSection"></select><input type="text" id="fNewSection" placeholder="New section name" maxlength="60" hidden></div>
       <label class="k" for="fType">Type</label><select id="fType"></select>
-      <label class="k" for="fPP">Pages</label>
+      <label class="k top" for="fPP">Pages</label>
       <div class="edrow"><button class="zb" type="button" id="ppDown" aria-label="Smaller">&minus;</button>
         <input type="text" id="fPP" inputmode="decimal" autocomplete="off" aria-describedby="ppHint"><button class="zb" type="button" id="ppUp" aria-label="Bigger">+</button>
-        <span class="sizes" role="group" aria-label="Part of a page"><button class="szb" type="button" id="ppHalf" aria-pressed="false">&frac12; page</button><button class="szb" type="button" id="ppQuarter" aria-pressed="false">&frac14; page</button></span>
-        <span class="m edhint" id="ppHint">Half and quarter pages share a page: halves top and bottom, quarters in a 2 &times; 2 grid. Sell each one on its own.</span></div>
+        <span class="sizes"><button class="szb" type="button" id="ppHalf" aria-pressed="false">&frac12; page</button></span>
+        <span class="m edhint" id="ppHint">A half page shares its page with another half page, top and bottom. Sell each half on its own.</span></div>
       <span class="k">Status</span>
       <div class="edrow"><span class="seg" role="radiogroup" aria-label="Sales status">
-          <label class="o"><input type="radio" name="st" value="open">OPEN</label><label><input type="radio" name="st" value="sold">Sold</label><label><input type="radio" name="st" value="house">House</label></span>
+          <label class="o"><input type="radio" name="st" value="open">OPEN</label><label><input type="radio" name="st" value="sold">SOLD</label><label><input type="radio" name="st" value="house">HOUSE</label></span>
         <input type="text" id="fClient" placeholder="Client name" maxlength="80"></div>
-      <span class="k">Content</span><div class="edrow" id="fContentRow"></div>
-      <span class="k">Layout</span><div class="edrow" id="fLayoutRow"></div>
-      <span class="k">Lock</span>
-      <div class="edrow"><label class="chk"><input type="checkbox" id="fLocked"> Locked: final, no more changes</label></div>
-      <label class="k" for="fSample">Sample page</label>
-      <div class="edrow"><input type="number" id="fSample" min="1" max="384" step="1" placeholder="—"><span class="status">first page in sample book v14</span></div>
-      <span class="k" id="fPdfK" hidden>Sample PDF</span>
-      <div class="edrow pdfrow" id="fPdfRow" hidden><span class="pdfinfo" id="fPdfInfo"></span>
-        <button class="nb" type="button" id="fPdfBtn">Upload PDF</button><button class="nb danger" type="button" id="fPdfDel" hidden>Delete</button>
-        <input type="file" id="fPdf" accept="application/pdf,.pdf" hidden></div>
+      <span class="k">Progress</span>
+      <div class="edrow prog3" id="fProgRow"><span class="pg1" id="fContentRow"></span><span class="pg1" id="fLayoutRow"></span>
+        <label class="chk" title="Locked: the page is final, no more changes until it is unlocked"><input type="checkbox" id="fLocked"><span>Locked<span class="lkx">: final, no more changes</span></span></label></div>
       <label class="k" for="fNote">Note</label><input type="text" id="fNote" maxlength="200">
+      <span class="k top" id="fLinkK">Source links</span>
+      <div class="lkbox" id="fLinkBox"><div id="fLinkList"></div>
+        <div class="edrow"><input type="text" inputmode="url" id="fLinkUrl" placeholder="Paste a link (Drive, OneDrive, web&hellip;)" aria-label="Link address: Google Drive, OneDrive or a web page" autocomplete="off"><input type="text" id="fLinkLabel" placeholder="Label (optional)" aria-label="Link label" maxlength="120"><button class="nb" type="button" id="fLinkAdd">Add link</button></div></div>
+      <label class="k quiet top" for="fSample">Sample<small>for reference only</small></label>
+      <div class="smpbox">
+        <div class="edrow"><input type="number" id="fSample" min="1" max="384" step="1" placeholder="&mdash;" aria-describedby="smpNote"><span>first page in sample book v14</span>
+          <span class="pdfrow" id="fPdfRow" hidden><span class="pdfinfo" id="fPdfInfo"></span>
+            <button class="nb sm" type="button" id="fPdfBtn">Upload PDF</button><button class="nb sm danger" type="button" id="fPdfDel" hidden>Delete</button>
+            <input type="file" id="fPdf" accept="application/pdf,.pdf" hidden></span></div>
+        <p class="smpnote" id="smpNote">A sample is a guide only: a page from the 2026 book or a draft 2027 template, not the final page.</p>
+      </div>
+      <span class="k top">Position</span>
+      <div class="edrow"><button class="nb" type="button" id="edEarlier" title="Move this item one place towards the front of the book. Saved at once.">&larr; Move earlier</button>
+        <button class="nb" type="button" id="edLater" title="Move this item one place towards the back of the book. Saved at once.">Move later &rarr;</button>
+        <button class="nb" type="button" id="edAdd" title="Add a new page straight after this one and open it">+ New page after this</button>
+        <span class="m edhint">Move shifts this item one place in the book and is saved at once; at the end of a section it joins the next one. You can also drag it on the board.</span></div>
     </div>
     <div class="confirm" id="edConfirm" hidden><span id="edConfirmText"></span>
       <button class="nb danger" type="button" id="edYes">Delete</button><button class="nb" type="button" id="edNo">Keep</button></div>
     <div class="pvfoot">
       <button class="nb danger" type="button" id="edDelete">Delete</button>
-      <button class="nb" type="button" id="edEarlier" title="Move before the previous item">&lsaquo; Earlier</button>
-      <button class="nb" type="button" id="edLater" title="Move after the next item">Later &rsaquo;</button>
-      <button class="nb" type="button" id="edAdd">+ Page after</button>
       <button class="nb" type="button" id="edNotes" hidden>Notes</button>
       <span class="grow"></span>
       <button class="nb" type="button" id="edCancel">Cancel</button>
@@ -843,21 +912,21 @@ table.tl tr.ph td.g{padding:0 10px}
     </div>
     <div class="edbody">
       <span class="k">Kind</span>
-      <div class="edrow"><span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpfk" value="task">Task</label><label><input type="radio" name="mpfk" value="note">Note</label><label><input type="radio" name="mpfk" value="event">Date</label></span></div>
-      <label class="k" for="mpfTitle">Title</label><input type="text" id="mpfTitle" maxlength="200" required>
-      <label class="k" for="mpfDate">Date</label>
-      <div class="edrow"><input type="date" id="mpfDate"><input type="time" id="mpfTime" aria-label="Time (optional)"><span class="m">when it happens or when you will do it</span></div>
-      <label class="k" for="mpfDue">Deadline</label><div class="edrow"><input type="date" id="mpfDue"></div>
+      <div class="edrow"><span class="seg" role="radiogroup" aria-label="Kind"><label><input type="radio" name="mpfk" value="task">Task</label><label><input type="radio" name="mpfk" value="note">Note</label><label><input type="radio" name="mpfk" value="event">Date</label><label><input type="radio" name="mpfk" value="source">Source</label></span></div>
+      <label class="k" for="mpfTitle" id="mpfTitleK">Title</label><input type="text" id="mpfTitle" maxlength="200" required>
+      <label class="k" for="mpfDate" id="mpfDateK">Date</label>
+      <div class="edrow" id="mpfDateRow"><input type="date" id="mpfDate"><input type="time" id="mpfTime" aria-label="Time (optional)"><span class="m">when it happens or when you will do it</span></div>
+      <label class="k" for="mpfDue" id="mpfDueK">Deadline</label><div class="edrow" id="mpfDueRow"><input type="date" id="mpfDue"></div>
       <span class="k" id="mpfStatusK">Status</span>
       <div class="edrow" id="mpfStatusRow"><span class="seg" role="radiogroup" aria-label="Status"><label><input type="radio" name="mpfs" value="todo">To do</label><label><input type="radio" name="mpfs" value="doing">Doing</label><label><input type="radio" name="mpfs" value="waiting">Waiting</label><label class="o"><input type="radio" name="mpfs" value="done">Done</label></span></div>
       <label class="k" for="mpfTags">Tags</label><input type="text" id="mpfTags" maxlength="200" placeholder="Comma separated, e.g. sales, printer">
       <span class="k">Pin</span><div class="edrow"><label class="chk"><input type="checkbox" id="mpfPin"> Keep at the top of the list</label></div>
       <label class="k" for="mpfNotes">Notes</label>
       <div class="mpnotes"><textarea id="mpfNotes" rows="10" maxlength="50000"></textarea><div class="cbar"><button class="nb" type="button" id="mpfCopy">Copy notes</button></div></div>
-      <span class="k">Links</span>
-      <div class="mpattach"><div id="mpfLinkList"></div>
-        <div class="edrow"><input type="url" id="mpfUrl" placeholder="https://…" aria-label="Link address"><input type="text" id="mpfLabel" placeholder="Label (optional)" aria-label="Link label" maxlength="120"><button class="nb" type="button" id="mpfLinkAdd">Add link</button></div></div>
-      <span class="k">Files</span>
+      <span class="k" id="mpfLinksK">Links</span>
+      <div class="mpattach" id="mpfLinksBox"><div id="mpfLinkList"></div>
+        <div class="edrow"><input type="text" inputmode="url" id="mpfUrl" placeholder="Paste a link: Google Drive, OneDrive, a web page…" aria-label="Link address"><input type="text" id="mpfLabel" placeholder="Label (optional)" aria-label="Link label" maxlength="120"><button class="nb" type="button" id="mpfLinkAdd">Add link</button></div></div>
+      <span class="k" id="mpfFilesK">Files</span>
       <div class="mpattach"><div id="mpfFileList"></div>
         <div class="edrow"><button class="nb" type="button" id="mpfFileBtn">Attach files</button><input type="file" id="mpfFile" multiple hidden></div></div>
     </div>
@@ -906,9 +975,9 @@ table.tl tr.ph td.g{padding:0 10px}
 
 <div class="toast" id="toast" role="status" hidden></div>
 
-<script src="plan-seed.js?v=20261106b"></script>
-<script src="timeline-seed.js?v=20261106b"></script>
-<script src="firebase-config.js?v=20261106b"></script>
-<script src="flatplan.js?v=20261106b"></script>
+<script src="plan-seed.js?v=20261116a"></script>
+<script src="timeline-seed.js?v=20261116a"></script>
+<script src="firebase-config.js?v=20261116a"></script>
+<script src="flatplan.js?v=20261116a"></script>
 </body>
 </html>

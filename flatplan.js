@@ -74,11 +74,13 @@ function normPP(v){
   if (n >= 0.75) return clamp(Math.round(n), 1, 400);
   return n >= 0.375 ? 0.5 : 0.25;
 }
+/* what is typed in the page editor: whole pages or a half. Quarter pages are no longer sold (team decision, 16 Nov 2026),
+   so anything under a page becomes a half; an old quarter already in the plan stays as it is until someone changes it. */
 function parsePP(s){
   s = String(s == null ? '' : s).trim().replace(',', '.');
-  if (s === '½' || s === '1/2') return 0.5;
-  if (s === '¼' || s === '1/4') return 0.25;
-  return normPP(s);
+  if (s === '½' || s === '1/2' || s === '¼' || s === '1/4') return 0.5;
+  const n = normPP(s);
+  return n < 1 ? 0.5 : n;
 }
 function fmtPP(n){                                       // 0.5 -> ½, 15.75 -> 15¾
   n = Math.round((+n || 0) * 4) / 4;
@@ -100,6 +102,42 @@ function publicItems(items){
     sponsor: it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? 'SOLD' : '', contentPages: it.contentPages, layoutPages: it.layoutPages, locked: it.locked}));
 }
 const hyph = s => esc(s).replace(/[\w']+/g, w => (BREAKS[w] || w).split('|').join('&shy;'));
+/* links: only http(s) addresses are ever shown as links; anything else gets https:// in front */
+const safeUrl = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
+function linkHost(u){ try { return new URL(safeUrl(String(u || ''))).hostname.replace(/^www\./, ''); } catch (e) { return ''; } }
+/* a short name for a link that has no label: the service it points to, or the site */
+function linkName(u){
+  let x; try { x = new URL(safeUrl(String(u || ''))); } catch (e) { return String(u || ''); }
+  const h = x.hostname.replace(/^www\./, ''), p = x.pathname;
+  if (h === 'docs.google.com') return /^\/spreadsheets/.test(p) ? 'Google Sheets' : /^\/presentation/.test(p) ? 'Google Slides' : /^\/forms/.test(p) ? 'Google Forms' : 'Google Docs';
+  if (h === 'drive.google.com') return /\/folders\//.test(p) ? 'Google Drive folder' : 'Google Drive';
+  if (/(^|\.)sharepoint\.com$/.test(h)) return 'SharePoint';
+  if (h === '1drv.ms' || h === 'onedrive.com' || /(^|\.)onedrive\.live\.com$/.test(h)) return 'OneDrive';
+  if (/(^|\.)dropbox\.com$/.test(h)) return 'Dropbox';
+  if (h === 'mail.google.com') return 'Gmail';
+  if (h === 'wa.me' || /(^|\.)whatsapp\.com$/.test(h)) return 'WhatsApp';
+  if (/(^|\.)canva\.com$/.test(h)) return 'Canva';
+  return h;
+}
+/* one or more addresses typed or pasted into a link box, separated by spaces: null if any of them is not a web address.
+   One address may be typed without https://; several must each be a full address, so that a stray space is not read as a second link. */
+function parseUrls(raw){
+  const out = [], toks = String(raw || '').split(/\s+/).filter(Boolean);
+  if (toks.length > 1 && !toks.every(t => /^https?:\/\//i.test(t))) return null;
+  for (const t of toks) {
+    const u = safeUrl(t); let x; try { x = new URL(u); } catch (e) { return null; }
+    if (!/^https?:$/.test(x.protocol) || x.hostname.indexOf('.') < 0) return null;
+    if (out.indexOf(u) < 0) out.push(u);
+  }
+  return out.length ? out : null;
+}
+function linkHTML(l){
+  const name = l.label || linkName(l.url), host = linkHost(l.url);
+  return '<a href="' + esc(safeUrl(l.url)) + '" target="_blank" rel="noopener noreferrer" title="' + esc(l.url) + '">' + esc(name) + '</a>' +
+    (host && host !== name ? '<span class="m">' + esc(host) + '</span>' : '');
+}
+const cleanLinks = a => (Array.isArray(a) ? a : []).filter(l => l && typeof l.url === 'string' && l.url.trim()).slice(0, 30)
+  .map(l => ({url: safeUrl(l.url.trim()).slice(0, 2000), label: String(l.label || '').trim().slice(0, 120)}));
 const newId = () => 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 let toastTimer = null;
 function toast(msg, err){
@@ -279,7 +317,7 @@ const OPS = {
     return items.map(x => x.section === op.section ? Object.assign({}, x, {section: to}) : x);
   }
 };
-const statusText = it => it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? (S.pub ? 'sold' : 'sold to ' + it.sponsor) : 'house';
+const statusText = it => it.sponsor === 'OPEN' ? 'OPEN' : it.sponsor ? (S.pub ? 'SOLD' : 'SOLD to ' + it.sponsor) : 'HOUSE';
 function progressText(kind, b, a){
   const k = kind === 'content' ? 'contentPages' : 'layoutPages', name = kind === 'content' ? 'content' : 'layout';
   if (a[k] === b[k]) return '';
@@ -421,6 +459,12 @@ class PracticeStore {           // without Firebase: changes stay in this browse
     this.log({at: Date.now(), by: '', name: 'Practice', ip: '', summary}); this.save();
   }
   async deleteSample(id, summary){ if (this.samples) this.samples.delete(id); this.log({at: Date.now(), by: '', name: 'Practice', ip: '', summary}); this.save(); }
+  async putLinks(id, links, summary){
+    this.links = this.links || new Map();
+    if (links.length) this.links.set(id, links); else this.links.delete(id);
+    this.log({at: Date.now(), by: '', name: 'Practice', ip: '', summary}); this.save();
+    if (this.onLinks) this.onLinks(new Map(this.links));
+  }
   reset(){
     try { sessionStorage.removeItem(this.key); } catch (e) {}
     this.d = {items: this.seed, version: 0, updatedAt: null, log: [], rows: this.tlSeed, tlVersion: 0};
@@ -461,6 +505,7 @@ class LiveStore {
     this.notesCol = f.collection(this.db, 'flatplans', PLAN_ID, 'notes');
     this.chatCol = f.collection(this.db, 'flatplans', PLAN_ID, 'chat');
     this.pubRef = f.doc(this.db, 'flatplans', PLAN_ID, 'public', 'board');
+    this.linksCol = f.collection(this.db, 'flatplans', PLAN_ID, 'links');
     this.wsCol = f.collection(this.db, 'private', 'workspace', 'entries');
     this.blobCol = f.collection(this.db, 'private', 'workspace', 'blobs');
     this.user = null; this.editor = false; this.last = null; this.lastTimeline = null; this.subs = []; this.names = {};
@@ -627,6 +672,10 @@ class LiveStore {
       else this.lastTimeline = {rows: this.tlSeed, meta: {version: 0, seed: true}};
       if (cb.timeline) cb.timeline(this.lastTimeline);
     }, fail('timeline')));
+    this.subs.push(f.onSnapshot(this.linksCol, qs => {
+      const m = new Map(); qs.forEach(d => m.set(d.id, (d.data() || {}).links));
+      if (cb.links) cb.links(m);
+    }, fail('source links')));
   }
   stopCollab(){
     this.subs.forEach(un => { try { un(); } catch (e) {} }); this.subs = []; this.lastTimeline = null;
@@ -656,6 +705,14 @@ class LiveStore {
     const u = this.me(), ip = await getIp(), f = this.f, b = f.writeBatch(this.db);
     b.delete(this.sampleRef(id));
     b.set(f.doc(this.changes), {at: f.serverTimestamp(), by: u.email, name: u.name, ip, action: 'sample', summary});
+    await b.commit();
+  }
+  /* source links for an item: flatplans/2027/links/{item id} = {links: [{url, label}], by, byName, at} (editors only).
+     Kept beside the plan, like sample PDFs, so a change of the plan can never drop them. Each change is logged. */
+  async putLinks(id, links, summary){
+    const u = this.me(), ip = await getIp(), f = this.f, b = f.writeBatch(this.db), ref = f.doc(this.linksCol, id);
+    if (links.length) b.set(ref, {links, by: u.email, byName: u.name, at: f.serverTimestamp()}); else b.delete(ref);
+    b.set(f.doc(this.changes), {at: f.serverTimestamp(), by: u.email, name: u.name, ip, action: 'links', summary});
     await b.commit();
   }
   async resolveNote(id, resolved){
@@ -845,6 +902,19 @@ function fracChipHTML(it){
 const MIN_KEY = 'mecsr-board-min';
 const MIN = new Set((() => { try { const a = JSON.parse(localStorage.getItem(MIN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } })());
 function saveMin(){ try { localStorage.setItem(MIN_KEY, JSON.stringify([...MIN])); } catch (e) {} }
+/* a fold button for a block of the page, remembered per browser: the sections table, and the two parts of My plan */
+const FOLD_KEY = 'mecsr-folded';
+const FOLD = new Set((() => { try { const a = JSON.parse(localStorage.getItem(FOLD_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } })());
+function setFold(btn, name, what, apply){
+  const draw = () => {
+    const on = FOLD.has(name); btn.innerHTML = on ? '+' : '&minus;'; btn.setAttribute('aria-expanded', String(!on));
+    btn.title = (on ? 'Show ' : 'Minimise ') + what; btn.setAttribute('aria-label', btn.title); apply(on);
+  };
+  btn.addEventListener('click', () => { if (FOLD.has(name)) FOLD.delete(name); else FOLD.add(name);
+    try { localStorage.setItem(FOLD_KEY, JSON.stringify([...FOLD])); } catch (e) {} draw(); });
+  draw();
+}
+setFold(el('sumMin'), 'sections-table', 'the sections table', on => { el('sumWrap').classList.toggle('min', on); el('sumNote').hidden = on; });
 let renaming = null;                    // the section being renamed in Edit plan
 function bandLabel(s, edit){
   const min = MIN.has(s.section), name = esc(secName(s.section)), rn = edit && renaming === s.section;
@@ -1001,38 +1071,51 @@ async function addAfter(afterId, section){
 }
 
 /* the page editor */
-const ed = el('ed'); let edId = null, edPP = 1;
-const ED_FIELDS = ['fName', 'fSection', 'fNewSection', 'fType', 'fPP', 'ppDown', 'ppUp', 'ppHalf', 'ppQuarter', 'fClient', 'fSample', 'fNote', 'fPdfBtn', 'fPdfDel'];
+const ed = el('ed'); let edId = null, edPP = 1, lkBusy = false, edSnap = null;      // edSnap: the window's fields as they were when it opened
+const ED_FIELDS = ['fName', 'fSection', 'fNewSection', 'fType', 'fPP', 'ppDown', 'ppUp', 'ppHalf', 'fClient', 'fSample', 'fNote', 'fPdfBtn', 'fPdfDel'];
+const progCount = (pp, n) => !(pp <= 1 || (pp === 2 && n !== 1));           // a tick box for one page or a spread, a count of pages otherwise
 function progHTML(kind, n, pp){
   const id = kind === 'content' ? 'fContent' : 'fLayout', label = kind === 'content' ? 'Content done' : 'Layout done';
-  if (pp <= 1 || (pp === 2 && n !== 1)) return '<label class="chk"><input type="checkbox" id="' + id + '"' + (n >= pp ? ' checked' : '') + '> ' + label + '</label>';
-  return '<input type="number" id="' + id + '" min="0" max="' + pp + '" step="1" value="' + n + '" aria-label="' + label + ': pages done">' +
-    '<span class="status">of ' + pp + ' pages</span><button class="nb" type="button" data-allof="' + id + '">All</button>';
+  if (!progCount(pp, n)) return '<label class="chk"><input type="checkbox" id="' + id + '"' + (n >= pp ? ' checked' : '') + '> ' + label + '</label>';
+  return '<label class="pl" for="' + id + '" title="' + label + ': how many of its ' + pp + ' pages">' + label.replace(' done', '') + '</label>' +
+    '<input type="number" id="' + id + '" min="0" max="' + pp + '" step="1" value="' + n + '" aria-label="' + label + ': pages done">' +
+    '<span class="status">of ' + pp + '</span><button class="nb sm" type="button" data-allof="' + id + '" title="All ' + pp + ' pages done">All</button>';
 }
 function readProg(id, pp){
   const x = el(id); if (!x) return 0;
   return x.type === 'checkbox' ? (x.checked ? pp : 0) : clamp(parseInt(x.value, 10) || 0, 0, pp);
 }
 function renderProg(c, l){
-  el('fContentRow').innerHTML = progHTML('content', clamp(c, 0, edPP), edPP);
-  el('fLayoutRow').innerHTML = progHTML('layout', clamp(l, 0, edPP), edPP);
+  c = clamp(c, 0, edPP); l = clamp(l, 0, edPP);
+  el('fContentRow').innerHTML = progHTML('content', c, edPP);
+  el('fLayoutRow').innerHTML = progHTML('layout', l, edPP);
+  el('fProgRow').classList.toggle('nums', progCount(edPP, c) || progCount(edPP, l));
   applyLock();
 }
+/* a locked item that stays locked: nothing about it can be changed until Lock is unticked */
+function edOff(){ const it = S.items.find(x => x.id === edId); return el('fLocked').checked && !!(it && it.locked); }
 function applyLock(){
-  const lock = el('fLocked').checked, it = S.items.find(x => x.id === edId), wasLocked = !!(it && it.locked), off = lock && wasLocked;
+  const off = edOff();
   ED_FIELDS.forEach(id => { el(id).disabled = off; });
   document.querySelectorAll('#ed input[name=st], #fContentRow input, #fContentRow button, #fLayoutRow input, #fLayoutRow button').forEach(x => { x.disabled = off; });
   el('edDelete').disabled = off;
   const i = S.items.findIndex(x => x.id === edId);
   el('edEarlier').disabled = off || i <= 0; el('edLater').disabled = off || i >= S.items.length - 1;
   el('edLockNote').hidden = !off;
+  renderSizeBtns(); renderLinkRow();
+}
+/* the window's heading: where the item sits now (it changes when the item is moved) */
+function refreshEdHead(){
+  const it = S.L.items.find(x => x.id === edId); if (!it) return;
+  el('edTitle').textContent = it.part ? 'Page ' + it.from + ' · ' + sizeName(it.pp) : (it.from === it.to ? 'Page ' : 'Pages ') + pages(it.from, it.to);
+  el('edMeta').textContent = secName(it.section) + ' · ' + sizeName(it.pp) + (S.L.warnings.split.indexOf(it) >= 0 ? ' · spread split' : '') +
+    (it.locked ? ' · locked' : '');
+  el('edLockNote').textContent = 'Locked at p' + (it.lockedFrom || it.from) + '. Untick Lock to change, move or delete it.';
 }
 function openEditor(id){
   const it = S.L.items.find(x => x.id === id); if (!it) return;
   edId = id; edPP = it.pp;
-  el('edTitle').textContent = it.part ? 'Page ' + it.from + ' · ' + sizeName(it.pp) : 'Pages ' + pages(it.from, it.to);
-  el('edMeta').textContent = secName(it.section) + ' · ' + sizeName(it.pp) + (S.L.warnings.split.indexOf(it) >= 0 ? ' · spread split' : '') +
-    (it.locked ? ' · locked' : '');
+  refreshEdHead();
   el('fName').value = it.item;
   const secs = []; S.items.forEach(x => { if (secs.indexOf(x.section) < 0) secs.push(x.section); });
   el('fSection').innerHTML = secs.map(s => '<option value="' + esc(s) + '">' + esc(secName(s)) + '</option>').join('') + '<option value="__new">New section…</option>';
@@ -1040,57 +1123,117 @@ function openEditor(id){
   const types = ORDER.indexOf(it.type) < 0 ? ORDER.concat([it.type]) : ORDER;
   el('fType').innerHTML = types.map(t => '<option value="' + esc(t) + '">' + esc(TYPE_LABEL[t] || t) + '</option>').join('');
   el('fType').value = it.type;
-  el('fPP').value = fmtPP(it.pp); renderSizeBtns();
+  el('fPP').value = fmtPP(it.pp);
   const st = it.sponsor === 'OPEN' ? 'open' : it.sponsor ? 'sold' : 'house';
   document.querySelectorAll('#ed input[name=st]').forEach(r => { r.checked = r.value === st; });
   el('fClient').value = st === 'sold' ? it.sponsor : ''; el('fClient').hidden = st !== 'sold';
   el('fSample').value = it.sample ? it.sample[0] : '';
   el('fNote').value = it.note || '';
   el('fLocked').checked = !!it.locked;
-  el('edLockNote').textContent = 'Locked at p' + (it.lockedFrom || it.from) + '. Untick Lock to change, move or delete it.';
+  el('fLinkUrl').value = ''; el('fLinkLabel').value = '';
   renderProg(it.contentPages, it.layoutPages);
   el('edConfirm').hidden = true;
   renderPdfRow(); if (canSample()) fetchSample(id, true).then(() => { if (edId === id) renderPdfRow(); });
   const n = noteCount(id); el('edNotes').hidden = !isLiveEditor(); el('edNotes').textContent = 'Notes' + (n ? ' (' + n + ')' : '');
+  edSnap = readEditor();
   if (!ed.open) ed.showModal();
 }
 function readEditor(){
   let section = el('fSection').value;
   if (section === '__new') section = el('fNewSection').value.trim();
   const st = (document.querySelector('#ed input[name=st]:checked') || {}).value || 'house';
-  const pp = parsePP(el('fPP').value);
+  const raw = el('fPP').value.trim(), pp = raw === fmtPP(edPP) ? edPP : parsePP(raw);          // a size that was not touched stays as it is
   const s0 = parseInt(el('fSample').value, 10);
   return {item: el('fName').value.trim(), section, type: el('fType').value, pp,
     sponsor: st === 'open' ? 'OPEN' : st === 'sold' ? el('fClient').value.trim() : '',
     sample: s0 > 0 ? [s0, Math.min(SAMPLE_PAGES, s0 + Math.max(1, Math.ceil(pp)) - 1)] : null, note: el('fNote').value.trim(),
     contentPages: Math.min(readProg('fContent', edPP), pp), layoutPages: Math.min(readProg('fLayout', edPP), pp), locked: el('fLocked').checked, _st: st};
 }
-el('edForm').addEventListener('submit', ev => {
+/* which fields in the window differ from the saved item */
+function edChanged(it, f){
+  return Object.keys(f).filter(k => k !== '_st').some(k => JSON.stringify(f[k]) !== JSON.stringify(it[k] == null ? (k === 'sample' ? null : '') : it[k]));
+}
+function edDirty(){ return !!edSnap && JSON.stringify(readEditor()) !== JSON.stringify(edSnap); }      // has anything in the window been changed since it opened?
+el('edForm').addEventListener('submit', async ev => {
   ev.preventDefault();
-  const it = S.items.find(x => x.id === edId); if (!it) { ed.close(); return; }
+  const id = edId, it = S.items.find(x => x.id === id); if (!it) { ed.close(); return; }
   const f = readEditor();
   if (!f.item) { el('fName').focus(); return; }
   if (!f.section) { el('fNewSection').focus(); return; }
   if (f._st === 'sold' && !f.sponsor) { el('fClient').focus(); return; }
+  if (el('fLinkUrl').value.trim() && !el('fLinkUrl').disabled && !(await addEdLinks())) return;      // a link typed but not yet added goes in with Save
+  if (edId !== id || !ed.open) return;
+  const changed = edChanged(it, f);
   delete f._st;
-  const changed = Object.keys(f).some(k => JSON.stringify(f[k]) !== JSON.stringify(it[k] == null ? (k === 'sample' ? null : '') : it[k]));
   ed.close();
-  if (changed) act({type: 'update', id: edId, fields: f});
+  if (changed) act({type: 'update', id, fields: f});
+});
+/* source links for an item: where its content is kept (a Drive folder, a OneDrive file, a web page...). One item can have
+   several. They are saved at once, like the sample PDF, and each change is logged. item id -> [{url, label}] */
+const LK = new Map();
+const canLinks = () => !!(store && store.putLinks && (store.kind === 'practice' || isLiveEditor()));
+function onLinks(map){
+  LK.clear(); map.forEach((v, k) => { const a = cleanLinks(v); if (a.length) LK.set(k, a); });
+  if (ed.open) renderLinkRow(); if (pv.open) fillSide();
+}
+function renderLinkRow(){
+  const on = canLinks(); el('fLinkK').hidden = el('fLinkBox').hidden = !on; if (!on) return;
+  const list = LK.get(edId) || [], off = lkBusy || edOff();
+  el('fLinkList').innerHTML = list.length ? list.map((l, i) => '<div class="lkrow">' + linkHTML(l) +
+    '<button class="lnk danger" type="button" data-lkdel="' + i + '"' + (off ? ' disabled' : '') + '>Remove</button></div>').join('')
+    : '<span class="m">None yet. Add where this page’s content is kept: a Drive folder, a OneDrive file, a web page.</span>';
+  ['fLinkUrl', 'fLinkLabel', 'fLinkAdd'].forEach(id => { el(id).disabled = off; });
+}
+const itemWhere = it => it.part ? 'p' + it.from + ' (' + fmtPP(it.pp) + ')' : (it.from === it.to ? 'p' : 'pp ') + pages(it.from, it.to);
+async function saveLinks(id, list, summary, done){
+  lkBusy = true; if (edId === id && ed.open) renderLinkRow();
+  try {
+    await store.putLinks(id, list, summary);
+    if (list.length) LK.set(id, list); else LK.delete(id);
+    toast(done); return true;
+  } catch (e) { console.warn(e); toast('Not saved: ' + friendly(e), true); return false; }
+  finally { lkBusy = false; if (edId === id && ed.open) renderLinkRow(); if (pv.open) fillSide(); }
+}
+async function addEdLinks(){
+  const raw = el('fLinkUrl').value.trim(), label = el('fLinkLabel').value.trim().slice(0, 120), id = edId, it = S.L.items.find(x => x.id === id);
+  if (!it || lkBusy) return false;
+  if (!raw) { el('fLinkUrl').focus(); return false; }
+  const urls = parseUrls(raw);
+  if (!urls) { toast('That does not look like a web address', true); el('fLinkUrl').focus(); return false; }
+  const cur = LK.get(id) || [], add = urls.filter(u => !cur.some(l => l.url === u)).map(u => ({url: u, label: urls.length === 1 ? label : ''}));
+  if (!add.length) { el('fLinkUrl').value = ''; el('fLinkLabel').value = ''; toast('That link is already on this page'); return true; }
+  if (cur.length + add.length > 30) { toast('Not added: a page can hold up to 30 links', true); return false; }
+  const ok = await saveLinks(id, cur.concat(add), 'Added ' + (add.length > 1 ? add.length + ' source links' : 'the source link "' + (add[0].label || linkName(add[0].url)) + '"') +
+    ' to "' + it.item + '" ' + itemWhere(it), add.length > 1 ? add.length + ' links added' : 'Link added');
+  if (ok && edId === id) { el('fLinkUrl').value = ''; el('fLinkLabel').value = ''; }
+  return ok;
+}
+el('fLinkAdd').addEventListener('click', async () => { if (await addEdLinks()) el('fLinkUrl').focus(); });
+['fLinkUrl', 'fLinkLabel'].forEach(id => el(id).addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); el('fLinkAdd').click(); } }));
+el('fLinkList').addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-lkdel]'); if (!b || b.disabled) return;
+  if (!b.dataset.sure) {
+    b.dataset.sure = '1'; b.textContent = 'Confirm remove';
+    setTimeout(() => { if (document.contains(b)) { delete b.dataset.sure; b.textContent = 'Remove'; } }, 4000); return;
+  }
+  const id = edId, it = S.L.items.find(x => x.id === id), cur = (LK.get(id) || []).slice(), gone = cur[+b.dataset.lkdel]; if (!it || !gone) return;
+  cur.splice(+b.dataset.lkdel, 1);
+  await saveLinks(id, cur, 'Removed the source link "' + (gone.label || linkName(gone.url)) + '" from "' + it.item + '" ' + itemWhere(it), 'Link removed');
 });
 /* the sample PDF for an item: one page, or two for a spread (two pages, or one wide page that is cut in half) */
 let pdfBusy = false;
 function renderPdfRow(msg){
-  const on = canSample(); el('fPdfK').hidden = el('fPdfRow').hidden = !on; if (!on) return;
+  const on = canSample(); el('fPdfRow').hidden = !on; if (!on) return;
   const it = S.items.find(x => x.id === edId), d = SMP.get(edId), del = el('fPdfDel');
   delete del.dataset.sure; del.textContent = 'Delete';
   let info;
   if (msg) info = esc(msg);
   else if (d === undefined) info = 'Checking…';
-  else if (!d) info = 'No PDF uploaded. One page, or two for a spread.';
+  else if (!d) info = 'no PDF uploaded';
   else info = '<b>' + esc(d.name || 'Sample') + '</b> · ' + d.pages.length + (d.pages.length > 1 ? ' pages' : ' page') +
     (d.byName ? ' · ' + esc(d.byName) : '') + (d.at ? ' · ' + esc(fmtDate(new Date(tsMs(d.at)))) : '');
   el('fPdfInfo').innerHTML = info;
-  el('fPdfBtn').textContent = d ? 'Replace PDF' : 'Upload PDF';
+  el('fPdfBtn').textContent = d ? 'Replace PDF' : 'Upload PDF'; el('fPdfBtn').title = 'A sample PDF: one page, or two for a spread';
   del.hidden = !d;
   const off = pdfBusy || !!(it && it.locked && el('fLocked').checked);
   el('fPdfBtn').disabled = off; del.disabled = off;
@@ -1161,18 +1304,18 @@ document.querySelectorAll('#ed input[name=st]').forEach(r => r.addEventListener(
 }));
 function setPP(n){
   const c = readProg('fContent', edPP), l = readProg('fLayout', edPP);
-  edPP = normPP(n); el('fPP').value = fmtPP(edPP); renderProg(progNorm(c >= edPP ? edPP : c, edPP), progNorm(l >= edPP ? edPP : l, edPP)); renderSizeBtns();
+  edPP = normPP(n); el('fPP').value = fmtPP(edPP); renderProg(progNorm(c >= edPP ? edPP : c, edPP), progNorm(l >= edPP ? edPP : l, edPP));
 }
 function renderSizeBtns(){
-  const n = parsePP(el('fPP').value);
-  el('ppHalf').setAttribute('aria-pressed', String(n === 0.5)); el('ppQuarter').setAttribute('aria-pressed', String(n === 0.25));
+  const raw = el('fPP').value.trim(), n = raw === fmtPP(edPP) ? edPP : parsePP(raw);
+  el('ppHalf').setAttribute('aria-pressed', String(n === 0.5));
+  if (!edOff()) el('ppDown').disabled = n <= 0.5;                 // a half page is the smallest placement
 }
-/* minus from 1 page goes to a half, then a quarter; plus goes back up */
-const ppStep = (n, d) => d > 0 ? (n < 0.5 ? 0.5 : n < 1 ? 1 : n + 1) : (n > 1 ? n - 1 : n === 1 ? 0.5 : 0.25);
+/* minus from 1 page goes to a half page; plus goes back up */
+const ppStep = (n, d) => d > 0 ? (n < 1 ? 1 : n + 1) : (n > 1 ? n - 1 : 0.5);
 el('ppDown').addEventListener('click', () => setPP(ppStep(parsePP(el('fPP').value), -1)));
 el('ppUp').addEventListener('click', () => setPP(ppStep(parsePP(el('fPP').value), 1)));
 el('ppHalf').addEventListener('click', () => setPP(0.5));
-el('ppQuarter').addEventListener('click', () => setPP(0.25));
 el('fPP').addEventListener('change', () => setPP(parsePP(el('fPP').value)));
 el('fLocked').addEventListener('change', () => { applyLock(); renderPdfRow(); });
 el('ed').addEventListener('click', ev => { const b = ev.target.closest('[data-allof]'); if (b) el(b.dataset.allof).value = edPP; });
@@ -1186,18 +1329,36 @@ el('edDelete').addEventListener('click', () => {
 });
 el('edNo').addEventListener('click', () => { el('edConfirm').hidden = true; });
 el('edYes').addEventListener('click', () => { const id = edId; ed.close(); act({type: 'remove', id}); });
-el('edEarlier').addEventListener('click', async () => {
-  const i = S.items.findIndex(x => x.id === edId); if (i <= 0) return;
-  const prev = S.items[i - 1];
-  if (await act({type: 'move', id: edId, beforeId: prev.id, section: prev.section})) openEditor(edId);
-});
-el('edLater').addEventListener('click', async () => {
-  const i = S.items.findIndex(x => x.id === edId); if (i < 0 || i >= S.items.length - 1) return;
-  const next = S.items[i + 1], after = S.items[i + 2];
-  if (await act({type: 'move', id: edId, beforeId: after ? after.id : null, section: next.section})) openEditor(edId);
-});
-el('edAdd').addEventListener('click', () => { const id = edId; ed.close(); addAfter(id); });
+/* Move earlier / Move later: one place per click. Inside a section the item swaps with its neighbour. At the end of a
+   section, Move later puts it at the start of the next section (its page number stays; the section changes), and Move
+   earlier does the reverse, so the two always undo each other. Saved at once; what is typed in the window stays there. */
+async function edMove(dir){
+  const id = edId, i = S.items.findIndex(x => x.id === id), j = i + dir;
+  if (i < 0 || j < 0 || j >= S.items.length) return;
+  const cur = S.items[i], nb = S.items[j], after = S.items[i + 1], was = cur.section;
+  const op = nb.section !== cur.section ? {type: 'move', id, beforeId: dir > 0 ? nb.id : (after ? after.id : null), section: nb.section}      // joins the next or previous section
+    : dir < 0 ? {type: 'move', id, beforeId: nb.id, section: cur.section}
+    : {type: 'move', id, beforeId: S.items[j + 1] && S.items[j + 1].section === cur.section ? S.items[j + 1].id : null, section: cur.section};
+  const from = (S.L.items.find(x => x.id === id) || {}).from;
+  const ok = await act(op);
+  if (edId !== id || !ed.open) return;
+  const it = S.L.items.find(x => x.id === id);
+  if (ok && it) {
+    if (it.section !== was && el('fSection').value === was) { el('fSection').value = it.section; if (edSnap && edSnap.section === was) edSnap.section = it.section; }
+    toast(it.section !== was ? 'Now in ' + secName(it.section) + (it.from === from ? ', still ' : ', ') + itemWhere(it) : 'Moved to ' + itemWhere(it));
+  }
+  refreshEdHead(); applyLock();
+}
+el('edEarlier').addEventListener('click', () => edMove(-1));
+el('edLater').addEventListener('click', () => edMove(1));
+/* these two close the window, so anything changed in it has to be saved (or cancelled) first */
+function edKeepFirst(what){
+  if (!edDirty()) return false;
+  toast('Save your changes to this page first (or Cancel them), then ' + what + '.', true); return true;
+}
+el('edAdd').addEventListener('click', () => { if (edKeepFirst('add the new page')) return; const id = edId; ed.close(); addAfter(id); });
 el('edNotes').addEventListener('click', () => {
+  if (edKeepFirst('open its notes')) return;
   const it = S.L.items.find(x => x.id === edId); ed.close();
   if (it) { openViewer(it.from, null); setTimeout(() => { const t = document.querySelector('#pvMain .sitem[data-id="' + CSS.escape(it.id) + '"] textarea'); if (t) t.focus(); }, 50); }
 });
@@ -1423,7 +1584,8 @@ function show(page){
   }
   const ups = sp.filter(upImg), smp = sp.filter(p => !upImg(p)).map(samplePage).filter(Boolean);
   el('pvCap').textContent = [ups.length ? 'UPLOADED SAMPLE · ' + (ups.length > 1 ? 'PAGES ' + ups[0] + '–' + ups[1] : 'PAGE ' + ups[0]) : '',
-    smp.length ? 'SAMPLE BOOK V14 · ' + (smp.length > 1 ? 'PAGES ' + smp[0] + '–' + smp[smp.length - 1] : 'PAGE ' + smp[0]) : ''].filter(Boolean).join('   |   ');
+    smp.length ? 'SAMPLE BOOK V14 · ' + (smp.length > 1 ? 'PAGES ' + smp[0] + '–' + smp[smp.length - 1] : 'PAGE ' + smp[0]) : ''].filter(Boolean).join('   |   ') +
+    (ups.length || smp.length ? '   ·   FOR REFERENCE ONLY, NOT THE FINAL PAGE' : '');
   if (canSample()) items.forEach(x => { if (!SMP.has(x.id)) fetchSample(x.id).then(() => { if (pv.open && spreadOf(cur).some(q => (S.L.P2L[q] || []).indexOf(x) >= 0)) show(cur); }); });
   el('pvCount').textContent = (sp.length > 1 ? 'PAGES ' + sp[0] + '–' + sp[1] : 'PAGE ' + sp[0]) + ' / ' + S.L.total;
   el('pvPrev').disabled = sp[0] <= 1; el('pvNext').disabled = sp[sp.length - 1] >= S.L.total;
@@ -1482,7 +1644,7 @@ function renderSide(items, sp){
   const left = items.filter(it => sideOf(it, sp) === 'L'), right = items.filter(it => sideOf(it, sp) === 'R');
   const key = sp.join('-') + '|' + left.map(x => x.id).join(',') + '|' + right.map(x => x.id).join(',');
   if (key !== sideKey) {
-    const sec = it => '<section class="sitem" data-id="' + esc(it.id) + '"><div class="shd"></div><div class="smk"></div>' +
+    const sec = it => '<section class="sitem" data-id="' + esc(it.id) + '"><div class="shd"></div><div class="smk"></div><div class="slinks"></div>' +
       '<div class="sub">Notes</div><div class="snotes"></div>' + composerHTML('note', 'note:' + it.id, 'Add a note… type @ to tag someone', it.id) + '</section>';
     const fill = (box, list, empty) => { box.innerHTML = list.length ? list.map(sec).join('') : '<p class="m sempty">' + empty + '</p>'; restoreDrafts(box); };
     fill(SL, left, 'Page 1 is a right-hand page, so there is nothing on the left.');
@@ -1515,6 +1677,8 @@ function fillSide(){
       sec.querySelector('.shd').innerHTML = '<b>' + esc(it.item) + '</b><span class="m">' + (it.part ? 'p' + it.from + ' · ' + sizeName(it.pp) : 'pp ' + pages(it.from, it.to)) + ' · ' + esc(statusText(it)) + '</span>';
       const mk = sec.querySelector('.smk'); if (!mk.contains(document.activeElement) || document.activeElement.tagName !== 'INPUT') mk.innerHTML = markControls(it);
     }
+    const links = LK.get(sec.dataset.id) || [];
+    sec.querySelector('.slinks').innerHTML = links.length ? '<div class="sub">Source links</div>' + links.map(l => '<div class="lkrow">' + linkHTML(l) + '</div>').join('') : '';
     sec.querySelector('.snotes').innerHTML = notesHTML(sec.dataset.id);
   });
 }
@@ -1541,7 +1705,7 @@ const drafts = new Map();          // composer text kept across redraws: key -> 
 let editingMsg = null;             // {kind, id} of a note or message being edited
 const myEmail = () => store && store.user ? String(store.user.email || '').toLowerCase() : '';
 function collabReset(){
-  C.notes = []; C.chat = []; C.people = []; C.readAt = 0; C.byItem = new Map(); editingMsg = null;
+  C.notes = []; C.chat = []; C.people = []; C.readAt = 0; C.byItem = new Map(); editingMsg = null; LK.clear();
   const pop = el('mentPop'); if (pop) pop.hidden = true;
 }
 function onNotes(list){
@@ -2021,7 +2185,7 @@ function pageRow(L, p){
       ld: k < it.layoutPages ? 'Yes' : '', lock: it.locked ? 'Locked' : '', sample: samplePage(p), open: it.open}; }
   const free = 1 - on.reduce((a, x) => a + x.pp, 0), all = (f) => on.every(f) ? 'Yes' : on.some(f) ? 'Part' : '';
   return {section: secName(it.section), content: on.map(x => fmtPP(x.pp) + ' ' + shortLabel(x)).join(' / ') + (free > 1e-9 ? ' / ' + fmtPP(free) + ' free' : ''),
-    status: on.map(x => x.open ? 'OPEN' : x.sponsor || 'house').join(' / '), cd: all(x => x.contentPages > 0), ld: all(x => x.layoutPages > 0),
+    status: on.map(x => x.open ? 'OPEN' : x.sponsor || 'HOUSE').join(' / '), cd: all(x => x.contentPages > 0), ld: all(x => x.layoutPages > 0),
     lock: on.some(x => x.locked) ? 'Locked' : '', sample: null, open: on.some(x => x.open)};
 }
 function exportExcel(){
@@ -2079,7 +2243,7 @@ function exportExcel(){
       {key: 'lk', h: 'Locked', w: 8}, {key: 'sm', h: 'Sample pages (v14)', w: 12, num: true}, {key: 'no', h: 'Note', w: 32, wrap: true}];
     const w2 = sheet('Flat Plan', 'Flat plan · item by item', cI);
     L.items.forEach((it, k) => add(w2, cI, [k + 1, secName(it.section), it.item, TYPE_LABEL[it.type] || it.type, it.pp, itemPages(it),
-      it.open ? 'OPEN' : it.sponsor ? 'Sold: ' + it.sponsor : '', it.contentPages, it.layoutPages, it.locked ? 'Locked' : '',
+      it.open ? 'OPEN' : it.sponsor ? 'SOLD: ' + it.sponsor : '', it.contentPages, it.layoutPages, it.locked ? 'Locked' : '',
       it.sample ? pages(it.sample[0], it.sample[1]) : '', it.note || ''], it.open ? {fill: OPENF, openKey: 'st'} : it.locked ? {fill: LOCKF} : {}));
     w2.autoFilter = {from: {row: 3, column: 1}, to: {row: 3 + L.items.length, column: cI.length}};
     // Page by page
@@ -2292,9 +2456,12 @@ function exportPdf(){
 }
 
 /* ---------------- My plan: orient@mecsc.org's own tasks, notes, dates, links and files ----------------
-   Private to that account: the tab is shown to it alone, and the rules let no other account read or write it. */
+   Private to that account: the tab is shown to it alone, and the rules let no other account read or write it.
+   It has two parts: the plan (tasks, notes and dates, as a list or a calendar) and Sources, a list of named
+   references (for example "List of BOD") that each carry one or more links. A source is an entry of kind "source". */
 const MP = {entries: null, view: 'list', kind: 'all', q: '', month: '', err: '', openDone: false};
-const MP_KINDS = {task: 'Task', note: 'Note', event: 'Date'};
+const MP_KINDS = {task: 'Task', note: 'Note', event: 'Date', source: 'Source'};
+const mpIsSrc = e => e.kind === 'source';
 const MP_STATUS = [['todo', 'To do'], ['doing', 'Doing'], ['waiting', 'Waiting'], ['done', 'Done']];
 const MP_MAX = 25 * 1024 * 1024;
 const isOwnerNow = () => !!(store && store.kind === 'live' && store.isOwner && store.isOwner());
@@ -2314,13 +2481,12 @@ const mpDone = e => e.kind === 'task' && e.status === 'done';
 const mpKey = e => e.kind === 'task' ? (e.due || e.date) : e.date;          // the date an entry is filed under
 const addDays = (iso, n) => new Date((dayNum(iso) + n) * 864e5).toISOString().slice(0, 10);
 const fmtSize = n => n >= 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
-const safeUrl = u => /^https?:\/\//i.test(u) ? u : 'https://' + u;
-function mpMatch(e){
-  if (MP.kind !== 'all' && e.kind !== MP.kind) return false;
+function mpQ(e){                                           // the search box: it filters the plan and the sources
   const q = MP.q.trim().toLowerCase(); if (!q) return true;
-  return [e.title, e.notes, e.tags.join(' '), e.links.map(l => l.label + ' ' + l.url).join(' '), e.files.map(f => f.name).join(' ')]
+  return [e.title, e.notes, e.tags.join(' '), e.links.map(l => l.label + ' ' + linkName(l.url) + ' ' + l.url).join(' '), e.files.map(f => f.name).join(' ')]
     .join(' ').toLowerCase().indexOf(q) >= 0;
 }
+const mpMatch = e => (MP.kind === 'all' || e.kind === MP.kind) && mpQ(e);
 function mpChips(e){
   const today = todayISO(), out = [], k = e.due;
   if (e.kind !== 'task') out.push('<span class="mpk">' + MP_KINDS[e.kind] + '</span>');
@@ -2341,7 +2507,7 @@ function mpCard(e){
     '<button type="button" class="mpopen" data-mpopen><span class="mpt">' + esc(e.title || '(no title)') + '</span>' +
     '<span class="mpmeta">' + mpChips(e) + '</span>' + (first ? '<span class="mpn">' + esc(first.slice(0, 180)) + '</span>' : '') + '</button></div>';
 }
-function mpList(list){
+function mpList(list, total){
   const today = todayISO(), wk = addDays(today, 7);
   const G = [['pin', 'Pinned'], ['over', 'Overdue'], ['today', 'Today'], ['week', 'Next 7 days'], ['later', 'Later'], ['nodate', 'No date'],
     ['notes', 'Notes'], ['done', 'Done and past']], B = Object.fromEntries(G.map(g => [g[0], []]));
@@ -2364,7 +2530,27 @@ function mpList(list){
     if (g[0] === 'done') return '<details class="mpg done"' + (MP.openDone ? ' open' : '') + '><summary>' + g[1] + ' <span class="m">' + B.done.length + '</span></summary>' + body + '</details>';
     return '<section class="mpg g-' + g[0] + '"><h3>' + g[1] + ' <span class="m">' + B[g[0]].length + '</span></h3>' + body + '</section>';
   }).join('');
-  return html || '<p class="m mpempty">' + (MP.entries.length ? 'Nothing matches.' : 'Nothing here yet. Add a task, a note or a date above.') + '</p>';
+  return html || '<p class="m mpempty">' + (total ? 'Nothing matches.' : 'Nothing here yet. Add a task, a note or a date above.') + '</p>';
+}
+/* Sources: one row for each named list or reference, with its links as chips that open in a new tab */
+function mpSourceRow(e){
+  const first = e.notes.split('\n').map(x => x.trim()).find(Boolean) || '';
+  const meta = e.tags.map(t => '<span class="mptag">#' + esc(t) + '</span>').join('') +
+    (e.files.length ? '<span class="m">' + e.files.length + (e.files.length > 1 ? ' files' : ' file') + '</span>' : '');
+  const chips = e.links.map(l => '<a class="srcchip" href="' + esc(safeUrl(l.url)) + '" target="_blank" rel="noopener noreferrer" title="' + esc(l.url) + '">' +
+    esc(l.label || linkName(l.url)) + ' <span aria-hidden="true">&#8599;</span></a>').join('');
+  return '<div class="mpsrc' + (e.pinned ? ' pin' : '') + '" data-mp="' + esc(e.id) + '">' +
+    '<button type="button" class="mpopen" data-mpopen title="Open it to rename, add notes, tags or files"><span class="mpt">' + esc(e.title || '(no name)') + '</span>' +
+    (meta ? '<span class="mpmeta">' + meta + '</span>' : '') + (first ? '<span class="mpn">' + esc(first.slice(0, 160)) + '</span>' : '') + '</button>' +
+    '<span class="srclinks">' + (chips || '<span class="m">No link yet</span>') + '</span>' +
+    '<button type="button" class="lnk" data-mpaddlink>+ Add link</button></div>';
+}
+function mpSources(){
+  const all = MP.entries.filter(mpIsSrc), list = all.filter(mpQ)
+    .sort((a, b) => (b.pinned - a.pinned) || a.title.localeCompare(b.title, undefined, {sensitivity: 'base', numeric: true}));
+  el('mpSrcCount').textContent = all.length ? String(all.length) : '';
+  el('mpSrcOut').innerHTML = list.map(mpSourceRow).join('') || '<p class="m mpempty">' + (all.length ? 'No source matches.'
+    : 'No sources yet. Type a name (for example “List of BOD”), paste its link and press Add. You can add more links to it afterwards.') + '</p>';
 }
 function mpCalendar(list){
   const today = todayISO(), m = MP.month || today.slice(0, 7), y = +m.slice(0, 4), mo = +m.slice(5, 7) - 1;
@@ -2397,13 +2583,49 @@ function renderMyPlan(){
   document.querySelectorAll('#p2 input[name=mpv]').forEach(r => { r.checked = r.value === MP.view; });
   el('mpFil').querySelectorAll('[data-mpk]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mpk === MP.kind)));
   const box = el('mpOut');
-  if (!MP.entries) { box.innerHTML = '<p class="m mpempty">Loading…</p>'; return; }
-  const list = MP.entries.filter(mpMatch);
+  if (!MP.entries) { box.innerHTML = '<p class="m mpempty">Loading…</p>'; el('mpSrcOut').innerHTML = ''; return; }
+  const plan = MP.entries.filter(e => !mpIsSrc(e)), list = plan.filter(mpMatch);
   const keep = box.querySelector('details.mpg.done'); if (keep) MP.openDone = keep.open;
-  box.innerHTML = MP.view === 'cal' ? mpCalendar(list) : mpList(list);
-  const n = MP.entries.filter(e => !mpDone(e) && e.kind === 'task').length;
-  el('mpStatus').innerHTML = '<span class="pill live">Private</span>only orient@mecsc.org can see this · ' + n + (n === 1 ? ' open task' : ' open tasks');
+  box.innerHTML = MP.view === 'cal' ? mpCalendar(list) : mpList(list, plan.length);
+  mpSources();
+  const n = plan.filter(e => !mpDone(e) && e.kind === 'task').length, ns = MP.entries.length - plan.length;
+  el('mpStatus').innerHTML = '<span class="pill live">Private</span>only orient@mecsc.org can see this · ' + n + (n === 1 ? ' open task' : ' open tasks') +
+    ' · <button type="button" class="lnk" id="mpJump" title="Go to Sources">' + ns + (ns === 1 ? ' source' : ' sources') + ' &darr;</button>';
 }
+setFold(el('mpMinPlan'), 'myplan-plan', 'tasks, notes and dates', on => { el('mpPlan').hidden = on; });
+setFold(el('mpMinSrc'), 'myplan-sources', 'the sources', on => { el('mpSrc').hidden = on; });
+el('mpStatus').addEventListener('click', ev => {
+  if (!ev.target.closest('#mpJump')) return;
+  if (FOLD.has('myplan-sources')) el('mpMinSrc').click();
+  el('mpSrcHead').scrollIntoView({behavior: 'smooth', block: 'start'});
+});
+/* add a source: a name and, if it is at hand, its link (or several, separated by spaces). The same name again adds the link to it. */
+el('mpSrcAdd').addEventListener('submit', async ev => {
+  ev.preventDefault();
+  const name = el('mpSrcName').value.trim(), raw = el('mpSrcUrl').value.trim();
+  if (!name) { el('mpSrcName').focus(); return; }
+  let links = [];
+  if (raw) {
+    const urls = parseUrls(raw);
+    if (!urls) { toast('That does not look like a web address', true); el('mpSrcUrl').focus(); return; }
+    links = urls.map(u => ({url: u, label: ''}));
+  }
+  const same = (MP.entries || []).find(e => mpIsSrc(e) && e.title.trim().toLowerCase() === name.toLowerCase());
+  try {
+    if (same) {
+      const add = links.filter(l => !same.links.some(x => x.url === l.url));
+      if (!add.length) { toast('“' + same.title + '” is already in your sources' + (links.length ? ', with that link' : '')); return; }
+      await store.saveEntry(same.id, {links: same.links.concat(add).slice(0, 50)}, false);
+      toast((add.length > 1 ? add.length + ' links' : 'Link') + ' added to “' + same.title + '”');
+    } else await store.saveEntry(store.newEntryId(), entryData(cleanEntry({id: '', kind: 'source', title: name, links})), true);
+    el('mpSrcName').value = ''; el('mpSrcUrl').value = ''; el('mpSrcName').focus();
+  } catch (err) { console.warn(err); toast('Not added: ' + friendly(err), true); }
+});
+el('mpSrcOut').addEventListener('click', ev => {
+  const row = ev.target.closest('[data-mp]'); if (!row) return;
+  if (ev.target.closest('[data-mpaddlink]')) { openMpEd(row.dataset.mp); el('mpfUrl').focus(); return; }
+  if (ev.target.closest('[data-mpopen]')) openMpEd(row.dataset.mp);
+});
 function quickKind(){ return (document.querySelector('#mpAdd input[name=mpk]:checked') || {}).value || 'task'; }
 function syncQuickDate(){
   const k = quickKind(), d = el('mpDate'); d.title = k === 'task' ? 'Deadline (optional)' : 'Date (optional)'; d.setAttribute('aria-label', d.title);
@@ -2475,17 +2697,20 @@ function openMpEd(id, fresh){
   el('mpfTitle').focus();
 }
 function mpKindUi(){
-  const k = (document.querySelector('#mpEd input[name=mpfk]:checked') || {}).value || 'task';
+  const k = (document.querySelector('#mpEd input[name=mpfk]:checked') || {}).value || 'task', src = k === 'source';
   el('mpfStatusK').hidden = el('mpfStatusRow').hidden = k !== 'task';
+  ['mpfDateK', 'mpfDateRow', 'mpfDueK', 'mpfDueRow'].forEach(id => { el(id).hidden = src; });
+  el('mpfTitleK').textContent = src ? 'Name' : 'Title';
+  el('mpForm').classList.toggle('src', src);
+  // a source is its name and its links, so the links come straight after the name; for the rest they stay beside the files
+  const body = el('mpfLinksK').parentElement, before = src ? el('mpfDateK') : el('mpfFilesK');
+  if (el('mpfLinksBox').nextElementSibling !== before) { body.insertBefore(el('mpfLinksK'), before); body.insertBefore(el('mpfLinksBox'), before); }
 }
 document.querySelectorAll('#mpEd input[name=mpfk]').forEach(r => r.addEventListener('change', mpKindUi));
 function renderMpLinks(){
   const L = mpCur.e.links;
-  el('mpfLinkList').innerHTML = L.length ? L.map((l, i) => {
-    let host = ''; try { host = new URL(safeUrl(l.url)).hostname; } catch (e) {}
-    return '<div class="mprow"><a href="' + esc(safeUrl(l.url)) + '" target="_blank" rel="noopener noreferrer">' + esc(l.label || l.url) + '</a>' +
-      (l.label && host ? '<span class="m">' + esc(host) + '</span>' : '') + '<button class="lnk danger" type="button" data-mplinkdel="' + i + '">Remove</button></div>';
-  }).join('') : '<span class="m">No links yet.</span>';
+  el('mpfLinkList').innerHTML = L.length ? L.map((l, i) => '<div class="mprow">' + linkHTML(l) +
+    '<button class="lnk danger" type="button" data-mplinkdel="' + i + '">Remove</button></div>').join('') : '<span class="m">No links yet.</span>';
 }
 function renderMpFiles(msg){
   const F = mpCur.e.files;
@@ -2504,12 +2729,16 @@ function readMpEd(){
   e.pinned = el('mpfPin').checked; e.notes = el('mpfNotes').value.replace(/\s+$/, '');
   return e;
 }
-el('mpfLinkAdd').addEventListener('click', () => {
-  const url = el('mpfUrl').value.trim(), label = el('mpfLabel').value.trim();
-  if (!url) { el('mpfUrl').focus(); return; }
-  try { new URL(safeUrl(url)); } catch (e) { toast('That does not look like a web address', true); el('mpfUrl').focus(); return; }
-  mpCur.e.links.push({url: safeUrl(url), label}); el('mpfUrl').value = ''; el('mpfLabel').value = ''; renderMpLinks(); el('mpfUrl').focus();
-});
+/* what is in the link box goes into the entry's list of links: one address, or several separated by spaces. True unless it is not an address. */
+function addMpLinks(){
+  const raw = el('mpfUrl').value.trim(), label = el('mpfLabel').value.trim().slice(0, 120);
+  if (!raw) return true;
+  const urls = parseUrls(raw);
+  if (!urls) { toast('That does not look like a web address', true); el('mpfUrl').focus(); return false; }
+  urls.forEach(u => { if (!mpCur.e.links.some(l => l.url === u)) mpCur.e.links.push({url: u, label: urls.length === 1 ? label : ''}); });
+  el('mpfUrl').value = ''; el('mpfLabel').value = ''; renderMpLinks(); return true;
+}
+el('mpfLinkAdd').addEventListener('click', () => { if (el('mpfUrl').value.trim() && !addMpLinks()) return; el('mpfUrl').focus(); });
 el('mpfUrl').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); el('mpfLinkAdd').click(); } });
 el('mpfLabel').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); el('mpfLinkAdd').click(); } });
 el('mpfFileBtn').addEventListener('click', () => el('mpfFile').click());
@@ -2551,6 +2780,7 @@ el('mpfCopy').addEventListener('click', async () => {
 });
 el('mpForm').addEventListener('submit', async ev => {
   ev.preventDefault();
+  if (!addMpLinks()) return;                              // a link typed but not yet added goes in with Save
   const cur = mpCur, e = readMpEd();
   if (!e.title) { el('mpfTitle').focus(); return; }
   el('mpSave').disabled = true;
@@ -2615,7 +2845,7 @@ async function boot(){
       console.warn('Firebase could not load', e); store = new ReadOnlyStore();
       setState(publicItems(seed), {updatedAt: null, version: 0, seed: true}, true); renderTimeline(); return;
     }
-    store.collab = {notes: onNotes, chat: onChat, people: onPeople, timeline: st => setTimeline(st.rows, st.meta),
+    store.collab = {notes: onNotes, chat: onChat, people: onPeople, links: onLinks, timeline: st => setTimeline(st.rows, st.meta),
       reset: () => { collabReset(); TL.rows = null; },
       error: (what, e) => toast('The ' + what + ' could not be read: ' + friendly(e), true),
       workspace: onWorkspace, workspaceReset: wsReset,
@@ -2635,11 +2865,12 @@ async function boot(){
     });
   } else {
     store = new PracticeStore(seed, tlSeed);
+    store.onLinks = onLinks;
     store.subscribe(st => setState(st.items, st.meta, false));
     store.subscribeTimeline(st => setTimeline(st.rows, st.meta));
   }
   renderToolbar(); renderTimeline(); renderChatShell();
 }
-window.__flatplan = {S, TL, C, OPS, TOPS, layout, summarise, get store(){ return store; }};
+window.__flatplan = {S, TL, C, LK, OPS, TOPS, layout, summarise, get store(){ return store; }};
 boot();
 })();

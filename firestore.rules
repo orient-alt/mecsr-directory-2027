@@ -1,6 +1,7 @@
 rules_version = '2';
-// Firestore rules for the MECSR 2027 flat plan (project directory-ff8f1), version of 6 Nov 2026 (evening): the full plan is for
-// editors only, the public sees a copy with generic page names, and orient@mecsc.org has a private "My plan" space.
+// Firestore rules for the MECSR 2027 flat plan (project directory-ff8f1), version of 16 Nov 2026: the full plan is for
+// editors only, the public sees a copy with generic page names, orient@mecsc.org has a private "My plan" space, and each
+// item can carry source links.
 // Paste into Firebase console > Firestore Database > Rules, then Publish.
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -138,6 +139,20 @@ service cloud.firestore {
           && (request.resource.data.pages.size() == 1 || (request.resource.data.pages[1] is string
               && request.resource.data.pages[1].matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$')))
           && request.resource.data.name is string
+          && request.resource.data.by == request.auth.token.email
+          && request.resource.data.at == request.time;
+        allow delete: if isEditor();
+      }
+
+      // Source links for an item: where its content is kept (a Drive folder, a OneDrive file, a web page...), up to 30.
+      // Editors only. Kept beside the plan, like the sample PDFs. Each change also writes its own entry in the change log.
+      match /links/{itemId} {
+        allow read: if isEditor();
+        allow create, update: if isEditor()
+          && request.resource.data.keys().hasOnly(['links', 'by', 'byName', 'at'])
+          && request.resource.data.links is list
+          && request.resource.data.links.size() >= 1
+          && request.resource.data.links.size() <= 30
           && request.resource.data.by == request.auth.token.email
           && request.resource.data.at == request.time;
         allow delete: if isEditor();

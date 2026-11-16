@@ -4,14 +4,24 @@ Live page: **https://orient-alt.github.io/mecsr-directory-2027/**
 
 | Tab | What it does |
 |---|---|
-| **01 Flat Plan** | Figures (sold, content done, layout done, locked, page balance), the section summary and the board. Anyone with the link sees the **public board**: generic page names only (Front Cover, Company Showcase, Expert View, Country Profile, Listings…) and which pages are OPEN or sold, never client names, country names, notes or sample pages, and no Excel or PDF. Editors signed in with Google see everything; **Public view** shows them what the public sees. Each section of the board has a **minimise** button (and *Minimise all* / *Show all*), remembered per browser. **Page details** (the v14 sample pages, uploaded samples, statuses and notes) are for editors: click a page. **Edit plan** turns the board into an editor: drag pages and whole sections, rename an item or a whole section, change its size (whole pages, or a **½ or ¼ page** that shares its page with the placements next to it), mark OPEN, sold or house, mark content completed and layout done, lock a final page, add pages after it or delete it. Page numbers for every section and the whole book follow at once. **History** lists every change with who made it, when and from which IP address, and can restore any earlier version of the plan or the timeline. **Excel** and **PDF** download the plan as it stands. |
+| **01 Flat Plan** | Figures (sold, content done, layout done, locked, page balance), the section summary and the board. Anyone with the link sees the **public board**: generic page names only (Front Cover, Company Showcase, Expert View, Country Profile, Listings…) and which pages are OPEN or sold, never client names, country names, notes or sample pages, and no Excel or PDF. Editors signed in with Google see everything; **Public view** shows them what the public sees. Each section of the board has a **minimise** button (and *Minimise all* / *Show all*), and so does the sections table (it folds down to its totals), remembered per browser. **Page details** (the v14 sample pages, uploaded samples, statuses and notes) are for editors: click a page. **Edit plan** turns the board into an editor: drag pages and whole sections, rename an item or a whole section, change its size (whole pages, or a **½ page** that shares its page with another half), mark OPEN, SOLD or HOUSE, mark content completed and layout done, lock a final page, add pages after it or delete it. Page numbers for every section and the whole book follow at once. **History** lists every change with who made it, when and from which IP address, and can restore any earlier version of the plan or the timeline. **Excel** and **PDF** download the plan as it stands. |
 | **02 Timeline** | The production timeline for the printed book, to the release on 26 Feb 2027, kept simple: each task shows its due date, status and bar, grouped in phases that fold away. Click a task for its start date, team, notes and milestone flag, or to move, add after or delete it. Signed-in editors only. `…/mecsr-directory-2027/#timeline` opens this tab directly. |
-| **03 My plan** | orient@mecsc.org's own working plan, shown to that account only: tasks, notes and dates with a date, a deadline, a status, tags, notes, links and attached files (up to 25 MB each), as a list (pinned, overdue, today, next 7 days, later, no date, notes, done) or a month calendar. `…/mecsr-directory-2027/#myplan` opens it. Nobody else, editors included, can read it: the rules refuse them. |
+| **03 My plan** | orient@mecsc.org's own working plan, shown to that account only: tasks, notes and dates with a date, a deadline, a status, tags, notes, links and attached files (up to 25 MB each), as a list (pinned, overdue, today, next 7 days, later, no date, notes, done) or a month calendar. Below it, **Sources**: a list of named references (for example "List of BOD"), each with one or more links (Google Drive, OneDrive, a web page) that open from the row. `…/mecsr-directory-2027/#myplan` opens it. Nobody else, editors included, can read it: the rules refuse them. |
 
-**Half and quarter pages.** In the page editor, *Pages* goes below 1: the minus button steps 1 → ½ → ¼, or use the ½ page
-and ¼ page buttons. Placements of ½ and ¼ fill a page in order (halves top and bottom, quarters in a 2 × 2 grid) and each is sold
-on its own, with its own status, client, notes and sample. A whole page or a new section always starts on a fresh page, so
-the rest of a partly sold page stays free; Edit plan lists such pages. Figures count them as fractions (12¼ of 35¾ pages).
+**Half pages.** In the page editor, *Pages* goes below 1: the minus button steps 1 → ½, or use the ½ page button. Two halves
+share a page, top and bottom, and each is sold on its own, with its own status, client, notes, links and sample. A whole page
+or a new section always starts on a fresh page, so the other half of a partly sold page stays free; Edit plan lists such
+pages. Figures count them as fractions (12½ of 35½ pages). Quarter pages are no longer offered (team decision, 16 Nov 2026);
+the page editor does not create them, though the board would still draw one if the plan held it.
+
+**The page editor** (Edit plan, click a page): name, section, type, size, status (OPEN, SOLD with the client, or HOUSE), a
+Progress row (content done, layout done, lock), a note, **source links** and a sample. *Source links* are where the page's
+content is kept: paste a Google Drive, OneDrive or web address, with a label if wanted; a page can have several. They are
+saved at once, show beside the page in the page viewer, and each change is in History. The *Sample* row (a page of sample
+book v14, or an uploaded PDF) is a guide only: a page from the 2026 book or a draft 2027 template, not the final page.
+*Position* has **Move earlier** and **Move later**, which shift the item one place in the book per click and are saved at
+once (what is typed in the window stays; at the end of a section the item joins the next section, and the two buttons always
+undo each other), and **+ New page after this**.
 
 In **Edit plan**, the page editor also takes a **sample PDF** for each item (one page, or two for a spread; a wide
 single-page spread is cut in half). It shows in the page viewer in place of the v14 page. Replace or delete it there.
@@ -42,10 +52,11 @@ Firebase project `directory-ff8f1`, connected on 4 Nov 2026 (web app `Flat Plan`
 | `flatplans/2027/meta/timeline` | The production timeline | Editors |
 | `flatplans/2027/notes`, `…/chat` | Page notes and the team chat | Editors |
 | `flatplans/2027/samples` | Sample PDFs uploaded in the page editor, kept as one or two page images per item | Editors |
+| `flatplans/2027/links` | Source links added in the page editor: for each item, up to 30 links with labels | Editors |
 | `flatplans/2027/proofs` | The 384 page proofs of sample book v14, in 11 records (moved here from the repository on 6 Nov 2026) | Editors; only orient@mecsc.org uploads |
 | `people` | Who can be tagged, and when they last read their mentions | Editors |
 | `editors` | Editors outside `@mecsc.org` and `@mecsr.org` | Editors; only orient@mecsc.org adds or removes (**Approved people** button) |
-| `private/workspace/…` | **My plan**: `entries` (tasks, notes, dates) and `blobs` (attached files, in pieces under 1 MB) | orient@mecsc.org only |
+| `private/workspace/…` | **My plan**: `entries` (tasks, notes, dates and sources) and `blobs` (attached files, in pieces under 1 MB) | orient@mecsc.org only |
 
 - Editors are `@mecsc.org` and `@mecsr.org` Google accounts, plus anyone orient@mecsc.org approves under **Approved people**
   (a document in `editors`). Approved people have the same rights as staff. Removing someone takes effect within an hour.
@@ -74,7 +85,7 @@ odd page count. The book prints in sections of 16 pages: 368 pages is 23 section
 | `plan-seed.js` | The starting plan (3 Nov 2026, 372 pages, client names left out), used until the first change is saved |
 | `timeline-seed.js` | The starting production timeline (4 Nov 2026), used until the first change is saved |
 | `firebase-config.js` | The Firebase web config |
-| `firestore.rules` | Security rules to paste into Firebase (version of 6 Nov 2026 evening: full plan for editors, public copy, My plan) |
+| `firestore.rules` | Security rules to paste into Firebase (version of 16 Nov 2026: full plan for editors, public copy, My plan, source links) |
 | `lib/` | Sortable 1.15.6 (drag and drop), ExcelJS 4.4.0, jsPDF 2.5.2 and jsPDF-AutoTable 3.8.4 (reports), pdf.js 3.11.174 (reading uploaded sample PDFs) |
 
 Earlier files (the tracker workbooks, sample book PDFs, `proofs.js`, `app.js`, `session-record.html`) and the full history
